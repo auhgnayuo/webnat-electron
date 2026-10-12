@@ -21,7 +21,7 @@
 本包为私有包，从仓库安装并固定 tag：
 
 ```bash
-npm install git+ssh://git@code.comein.cn/mobile/private/electron/webnat.git#<tag>
+npm install git+ssh://git@code.comein.cn/mobile/private/electron/packages/webnat.git#<tag>
 ```
 
 `electron` 是可选的 peer 依赖（`>=44.0.0`）；主入口只使用它的类型。

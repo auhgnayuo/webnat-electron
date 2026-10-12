@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@code.comein.cn/mobile/private/electron/webnat.git"
+    "url": "git+ssh://git@code.comein.cn/mobile/private/electron/packages/webnat.git"
   },
   "type": "module",
   "engines": {
