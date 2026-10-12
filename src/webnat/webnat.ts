@@ -1,4 +1,5 @@
-import type { WebContents } from 'electron';
+import { createRequire } from 'node:module';
+import type { Session, WebContents } from 'electron';
 import { BroadcastMethodCall } from './broadcast-method-call.js';
 import { BroadcastWebnat } from './broadcast-webnat.js';
 import { Connection, ConnectionImpl } from './connection.js';
@@ -15,6 +16,10 @@ export class Webnat {
     if (webnat) {
       return webnat;
     }
+    // Counterpart of OHOS registerJavaScriptProxy('__native_webnat__', ['postMessage']): the page-side half of the transport.
+    // Done first, so a missing bridge script fails loudly before anything is attached to the WebContents.
+    Webnat.registerBridge(webContents.session);
+
     webnat = new Webnat(webContents);
     ctrl.__native_webnat__ = webnat;
 
@@ -28,12 +33,22 @@ export class Webnat {
     } catch (_) {
     }
 
-    // Counterpart of OHOS registerJavaScriptProxy('__native_webnat__', ['postMessage']); the preload sends on this channel.
+    // The bridge (preload) sends on this channel.
     webContents.ipc.on('__native_webnat__.postMessage', (_event, param: string): void => {
       webnat.postMessage(param);
     });
 
     return webnat;
+  }
+
+  // Electron registers preloads per session, not per WebContents: register once per session, found by file path so a second
+  // copy of this module (or a host that registered the script itself) adds no duplicate. No teardown, as on the other platforms.
+  private static registerBridge(session: Session): void {
+    const filePath = createRequire(import.meta.url).resolve('webnat-electron/preload');
+    if (session.getPreloadScripts().some((script) => script.type === 'frame' && script.filePath === filePath)) {
+      return;
+    }
+    session.registerPreloadScript({ type: 'frame', filePath });
   }
 
   private constructor(webContents: WebContents) {

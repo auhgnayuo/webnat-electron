@@ -11,6 +11,8 @@ export default defineConfig([
     sourcemap: true,
     clean: false,
     external: ['electron'],
+    // `Webnat` finds the bridge script with `createRequire(import.meta.url)`; the CommonJS build needs that shimmed.
+    shims: true,
   },
   {
     // The page-side bridge. A sandboxed preload can only require('electron'), so it must stay one self-contained

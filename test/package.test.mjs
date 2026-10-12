@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -24,6 +25,19 @@ test('the CommonJS entry exposes the same surface', () => {
   assert.deepEqual(Object.keys(cjs).sort(), PUBLIC_VALUES);
   assert.equal(typeof cjs.Webnat.of, 'function');
 });
+
+for (const [label, load] of [['ESM', () => import('webnat-electron')], ['CommonJS', async () => require('webnat-electron')]]) {
+  test(`the ${label} build finds and registers the bridge preload through its own exports`, async () => {
+    const { Webnat } = await load();
+    const registered = [];
+    const session = {
+      getPreloadScripts: () => registered,
+      registerPreloadScript: (script) => { registered.push({ ...script, id: String(registered.length) }); return String(registered.length); },
+    };
+    Webnat.of({ ipc: new EventEmitter(), session, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
+    assert.deepEqual(registered.map(({ type, filePath }) => ({ type, filePath })), [{ type: 'frame', filePath: require.resolve('webnat-electron/preload') }]);
+  });
+}
 
 test('WebnatVersion is the package version (it is written into the UA as Webnat/{version})', async () => {
   const { WebnatVersion } = await import('webnat-electron');

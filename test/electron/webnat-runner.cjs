@@ -1,7 +1,7 @@
 'use strict';
 // Runs INSIDE Electron's main process (spawned by electron.test.mjs). Webnat-over-Chromium checks that need a real renderer:
 // same-origin iframe relayed through the main frame, multi-frame method race, two WebContents isolation, navigation cleanup,
-// and the bridge scope (top frame only). The preload is registered on the session, exactly as MiniProgram.attach does.
+// and the bridge scope (top frame only). Nothing registers the preload by hand: Webnat.of does, as it does for a real host.
 const { app, BrowserWindow, session } = require('electron');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -37,7 +37,6 @@ const otherOrigin = http.createServer((_req, res) => { res.setHeader('content-ty
   const otherBase = `http://127.0.0.1:${otherOrigin.address().port}`;
   await app.whenReady();
   if (app.dock) app.dock.hide();
-  session.defaultSession.registerPreloadScript({ type: 'frame', filePath: path.join(distDir, 'preload/index.cjs') });
   const mk = () => new BrowserWindow({ show: false, webPreferences: { backgroundThrottling: false } });
   let failed = 0; const check = async (n, f) => { try { out(n, true, await f()); } catch (e) { failed++; out(n, false, String(e.message).slice(0, 300)); } };
 
@@ -85,6 +84,7 @@ const otherOrigin = http.createServer((_req, res) => { res.setHeader('content-ty
     const scope = async (webPreferences) => {
       const w = new BrowserWindow({ show: false, webPreferences: { backgroundThrottling: false, ...webPreferences } });
       try {
+        Webnat.of(w.webContents);
         await w.loadURL(base + '/plain.html');
         await w.webContents.executeJavaScript(`(async () => {
           const add = (props) => new Promise((resolve) => { const f = document.createElement('iframe'); Object.assign(f, props); f.addEventListener('load', resolve, { once: true }); document.body.appendChild(f); });
@@ -104,6 +104,24 @@ const otherOrigin = http.createServer((_req, res) => { res.setHeader('content-ty
     assert.deepEqual(await scope({}), expected);
     assert.deepEqual(await scope({ nodeIntegrationInSubFrames: true }), expected);
     return expected;
+  });
+  await check('Webnat.of registers the bridge itself: two WebContents on a fresh session share one registration and both pages get the bridge', async () => {
+    const fresh = session.fromPartition('webnat-fresh');
+    assert.equal(fresh.getPreloadScripts().length, 0, 'precondition: nothing registered on the new session');
+    const w1 = new BrowserWindow({ show: false, webPreferences: { session: fresh } });
+    const w2 = new BrowserWindow({ show: false, webPreferences: { session: fresh } });
+    try {
+      Webnat.of(w1.webContents);
+      Webnat.of(w2.webContents);
+      const scripts = fresh.getPreloadScripts();
+      assert.equal(scripts.length, 1, 'one registration per session, not one per WebContents');
+      assert.equal(scripts[0].type, 'frame');
+      assert.equal(scripts[0].filePath, path.join(distDir, 'preload/index.cjs'));
+      await Promise.all([w1.webContents.loadURL(base + '/plain.html'), w2.webContents.loadURL(base + '/plain.html')]);
+      const seen = await Promise.all([w1, w2].map((w) => w.webContents.executeJavaScript('typeof window.__native_webnat__')));
+      assert.deepEqual(seen, ['object', 'object']);
+      return { registrations: scripts.length, seen };
+    } finally { w1.destroy(); w2.destroy(); }
   });
   console.log('RESULT ' + JSON.stringify({ name: 'summary', ok: failed === 0, detail: 'electron ' + process.versions.electron }));
   app.exit(failed ? 1 : 0);

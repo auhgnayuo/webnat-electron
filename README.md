@@ -39,23 +39,7 @@ Webnat requires a Web-side implementation and also supports other Native platfor
 
 ## Usage
 
-### 1. Register the page-side bridge
-
-Electron has no API to inject an object into a page, so a preload script is the only way for the Web SDK to reach the main process. The package ships it; register it on the session that hosts your `WebContents`, **before** the page that uses Webnat is loaded:
-
-```typescript
-import { session } from 'electron';
-
-// after app.whenReady()
-session.defaultSession.registerPreloadScript({
-  type: 'frame',
-  filePath: require.resolve('webnat-electron/preload'), // in an ES module: createRequire(import.meta.url).resolve(...)
-});
-```
-
-The script only exposes `window.__native_webnat__.postMessage(string)`, forwards strings and nothing else, and never exposes `ipcRenderer`. Keep `sandbox` and `contextIsolation` on.
-
-### 2. Initialization
+### 1. Initialization
 
 ```typescript
 import { BrowserWindow } from 'electron';
@@ -63,10 +47,12 @@ import { Webnat } from 'webnat-electron';
 
 const win = new BrowserWindow();
 const webnat = Webnat.of(win.webContents); // one instance per WebContents
-await win.loadURL(url);                    // call `Webnat.of` first: it also writes `Webnat/{version}` into the UA
+await win.loadURL(url);                    // call `Webnat.of` first: the page only sees what was set up before it loads
 ```
 
-### 3. Wait for Web-side Connection
+`Webnat.of` does all the setup, like on the other platforms: it writes `Webnat/{version}` into the UA, listens for the page's messages, and registers the page-side bridge (a preload script) on the WebContents' session. You never register anything yourself, and you never configure `webPreferences.preload`; keep `sandbox` and `contextIsolation` on.
+
+### 2. Wait for Web-side Connection
 
 Connections are initiated by the **Web side (JavaScript)**. The Native side automatically receives and manages connections.
 
@@ -81,7 +67,7 @@ if (connection) {
 }
 ```
 
-### 4. Send and Receive Messages
+### 3. Send and Receive Messages
 
 ```typescript
 // Send raw message
@@ -136,12 +122,12 @@ Without a `connection`, `method` calls every connection and the first meaningful
 
 ## How It Works
 
-- **Web → Native**: `window.__native_webnat__.postMessage(string)` (the preload) → `ipcRenderer.send('__native_webnat__.postMessage')` → the `webContents.ipc` listener installed by `Webnat.of`.
+- **Web → Native**: `window.__native_webnat__.postMessage(string)` (exposed by the preload that `Webnat.of` registers; it forwards strings and nothing else and never exposes `ipcRenderer`) → `ipcRenderer.send('__native_webnat__.postMessage')` → the `webContents.ipc` listener installed by `Webnat.of`.
 - **Native → Web**: `webContents.executeJavaScript('window.__web_webnat__.receive(...)')`.
 
 ## Notes
 
-- **The preload is session-level.** A preload registered on a session applies to every `WebContents` of that session. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`.
+- **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat-electron/preload` yourself, that is fine too: it is not registered twice.
 - **The UA token covers the main frame and same-origin iframes only.** `Webnat.of` uses `webContents.setUserAgent`; a cross-site iframe does not get `Webnat/` and the Web SDK stays disabled there. `app.userAgentFallback` is the lever if you need it.
 - **`onMethod` handlers must be `async`** (or return a Promise). A synchronous throw does not produce a reply, so the peer waits until its timeout.
 - **Set a `timeout` on `method` calls.** There is no cleanup API: when a `WebContents` is destroyed everything attached to it dies with it, and a call without a timeout stays pending forever.

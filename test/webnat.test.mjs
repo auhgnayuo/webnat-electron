@@ -13,12 +13,27 @@ const TO_MAIN = '__native_webnat__.postMessage';
 const NATIVE = Message.NATIVE_UUID;
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+// Mirrors the two Session methods `Webnat.of` uses; the script shape and the unique ids follow Electron's PreloadScript.
+function createSession() {
+  const scripts = [];
+  return {
+    scripts,
+    registerPreloadScript(script) {
+      const id = `preload-${scripts.length + 1}`;
+      scripts.push({ ...script, id });
+      return id;
+    },
+    getPreloadScripts() { return [...scripts]; },
+  };
+}
+
 // `ipc` is a real EventEmitter, like `webContents.ipc`: only listeners registered on the exact channel fire.
-function createElectronHarness() {
+function createWebContents(session = createSession()) {
   const ipc = new EventEmitter();
   const executedMessages = [];
   const webContents = {
     ipc,
+    session,
     userAgent: 'Chromium/1.0 MiniProgram/3.0.2 Webnat/1.2.0',
     getUserAgent() { return this.userAgent; },
     setUserAgent(value) { this.userAgent = value; },
@@ -29,9 +44,14 @@ function createElectronHarness() {
       executedMessages.push(...JSON.parse(script.slice(prefix.length, -1)));
     },
   };
-  const webnat = Webnat.of(webContents);
-  const sendFromRenderer = (message, event = {}) => ipc.emit(TO_MAIN, event, JSON.stringify(message));
-  return { webContents, webnat, ipc, executedMessages, sendFromRenderer };
+  return { webContents, ipc, session, executedMessages };
+}
+
+function createElectronHarness({ session } = {}) {
+  const base = createWebContents(session);
+  const webnat = Webnat.of(base.webContents);
+  const sendFromRenderer = (message, event = {}) => base.ipc.emit(TO_MAIN, event, JSON.stringify(message));
+  return { ...base, webnat, sendFromRenderer };
 }
 
 function asWebMessage(message, from) {
@@ -56,6 +76,38 @@ test('Webnat.of is a per-WebContents singleton, tags the UA once and listens on 
   assert.match(h.webContents.userAgent, /MiniProgram\/3\.0\.2/);
   assert.deepEqual(h.ipc.eventNames(), [TO_MAIN]);
   assert.equal(h.ipc.listenerCount(TO_MAIN), 1);
+});
+
+test('Webnat.of registers the page-side bridge on the session by itself, once per session', () => {
+  const bridge = require.resolve('webnat-electron/preload');
+  const shared = createSession();
+  const first = createElectronHarness({ session: shared });
+  const second = createElectronHarness({ session: shared }); // another WebContents on the same session
+  assert.notEqual(first.webnat, second.webnat);
+  assert.deepEqual(shared.scripts.map(({ type, filePath }) => ({ type, filePath })), [{ type: 'frame', filePath: bridge }]);
+
+  const alone = createElectronHarness(); // a different session needs its own registration
+  assert.equal(alone.session.scripts.length, 1);
+  assert.equal(Webnat.of(alone.webContents), alone.webnat);
+  assert.equal(alone.session.scripts.length, 1, 'asking again for the same WebContents registers nothing');
+});
+
+test('Webnat.of does not duplicate a bridge the host already registered', () => {
+  const session = createSession();
+  session.registerPreloadScript({ type: 'frame', filePath: require.resolve('webnat-electron/preload') });
+  createElectronHarness({ session });
+  assert.equal(session.scripts.length, 1);
+});
+
+test('Webnat.of fails before attaching anything when the bridge cannot be registered', () => {
+  const session = createSession();
+  session.registerPreloadScript = () => { throw new Error('session refused the preload'); };
+  const { webContents, ipc } = createWebContents(session);
+  const userAgent = webContents.userAgent;
+  assert.throws(() => Webnat.of(webContents), /session refused the preload/);
+  assert.equal(webContents.__native_webnat__, undefined);
+  assert.equal(webContents.userAgent, userAgent);
+  assert.deepEqual(ipc.eventNames(), []);
 });
 
 test('connection lifecycle: open, duplicate open, dispatch, invalid input, close', () => {

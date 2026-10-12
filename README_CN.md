@@ -39,23 +39,7 @@ Webnat 需要 Web 端实现配合，同时支持其他 Native 平台：
 
 ## 使用
 
-### 1. 注册页面侧桥
-
-Electron 没有向页面注入对象的 API，preload 脚本是 Web SDK 触达主进程的唯一途径。本包自带该脚本，请在使用 Webnat 的页面**加载之前**，把它注册到承载 `WebContents` 的 session 上：
-
-```typescript
-import { session } from 'electron';
-
-// 需在 app.whenReady() 之后
-session.defaultSession.registerPreloadScript({
-  type: 'frame',
-  filePath: require.resolve('webnat-electron/preload'), // ES module 中用 createRequire(import.meta.url).resolve(...)
-});
-```
-
-脚本只暴露 `window.__native_webnat__.postMessage(string)`，只转发字符串，从不暴露 `ipcRenderer`。请保持 `sandbox` 与 `contextIsolation` 开启。
-
-### 2. 初始化
+### 1. 初始化
 
 ```typescript
 import { BrowserWindow } from 'electron';
@@ -63,10 +47,12 @@ import { Webnat } from 'webnat-electron';
 
 const win = new BrowserWindow();
 const webnat = Webnat.of(win.webContents); // 每个 WebContents 一个实例
-await win.loadURL(url);                    // 先调用 `Webnat.of`：它还会把 `Webnat/{version}` 写进 UA
+await win.loadURL(url);                    // 先调用 `Webnat.of`：页面只能看到它加载之前已经准备好的东西
 ```
 
-### 3. 等待 Web 端连接
+`Webnat.of` 一次做完全部准备，和其他平台一样：把 `Webnat/{version}` 写进 UA、监听页面发来的消息、并把页面侧的桥（一个 preload 脚本）注册到该 WebContents 所在的 session 上。你不需要自己注册任何东西，也不要配置 `webPreferences.preload`；请保持 `sandbox` 与 `contextIsolation` 开启。
+
+### 2. 等待 Web 端连接
 
 连接由 **Web 端（JavaScript）** 发起，Native 端自动接收并管理。
 
@@ -81,7 +67,7 @@ if (connection) {
 }
 ```
 
-### 4. 收发消息
+### 3. 收发消息
 
 ```typescript
 // 发送原始消息
@@ -136,12 +122,12 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 
 ## 工作原理
 
-- **Web → Native**：`window.__native_webnat__.postMessage(string)`（preload）→ `ipcRenderer.send('__native_webnat__.postMessage')` → `Webnat.of` 安装在 `webContents.ipc` 上的监听。
+- **Web → Native**：`window.__native_webnat__.postMessage(string)`（由 `Webnat.of` 注册的 preload 暴露，只转发字符串，从不暴露 `ipcRenderer`）→ `ipcRenderer.send('__native_webnat__.postMessage')` → `Webnat.of` 安装在 `webContents.ipc` 上的监听。
 - **Native → Web**：`webContents.executeJavaScript('window.__web_webnat__.receive(...)')`。
 
 ## 注意事项
 
-- **preload 是 session 级的。** 注册到某个 session 的 preload 对该 session 下的每个 `WebContents` 生效；桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。
+- **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat-electron/preload`，也没关系：不会注册两次。
 - **UA 标记只覆盖主框架与同源 iframe。** `Webnat.of` 使用 `webContents.setUserAgent`；跨站 iframe 拿不到 `Webnat/`，其中的 Web SDK 不会启用。需要时可用 `app.userAgentFallback`。
 - **`onMethod` 的 handler 必须是 `async`**（或返回 Promise）。同步抛错不会产生回复，对端会一直等到超时。
 - **`method` 调用请设置 `timeout`。** 没有清理 API：`WebContents` 销毁后，挂在它上面的一切随之失效，没有超时的调用会一直挂起。
