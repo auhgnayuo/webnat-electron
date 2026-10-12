@@ -43,7 +43,7 @@ Webnat 需要 Web 端实现配合，同时支持其他 Native 平台：
 
 ```typescript
 import { BrowserWindow } from 'electron';
-import { Webnat } from 'webnat-electron';
+import { Webnat } from 'webnat';
 
 const win = new BrowserWindow();
 const webnat = Webnat.of(win.webContents); // 每个 WebContents 一个实例
@@ -127,7 +127,7 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 
 ## 注意事项
 
-- **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat-electron/preload`，也没关系：不会注册两次。
+- **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat/preload`，也没关系：不会注册两次。
 - **UA 标记只覆盖主框架与同源 iframe。** `Webnat.of` 使用 `webContents.setUserAgent`；跨站 iframe 拿不到 `Webnat/`，其中的 Web SDK 不会启用。需要时可用 `app.userAgentFallback`。
 - **`onMethod` 的 handler 必须是 `async`**（或返回 Promise）。同步抛错不会产生回复，对端会一直等到超时。
 - **`method` 调用请设置 `timeout`。** 没有清理 API：`WebContents` 销毁后，挂在它上面的一切随之失效，没有超时的调用会一直挂起。

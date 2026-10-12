@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-12
+
+### Changed
+
+- **The package is now named `webnat`** (it was `webnat-electron` in 1.3.0 and 1.3.1), like the OHOS, Android, Darwin and Web packages: `import { Webnat } from 'webnat'`, bridge script `webnat/preload`. The platform suffix is kept in the repository name only. This is a breaking change for anyone who installed `webnat-electron`; the old tags `1.3.0` and `1.3.1` are left as they were.
+- **The tests no longer depend on the Web SDK**, which is what forced the old name (the Web SDK is also called `webnat`, and both cannot live in one `node_modules`). Like the other platforms, the unit tests run against protocol messages and a fake `WebContents`; the end-to-end run against the real Web SDK is done by hand with the demo host. The test run in a real Electron process shrinks to the two checks that need no SDK: the bridge reaches the top frame only, and `Webnat.of` registers it once per session. The iframe-relay, frame-race, WebContents-isolation and navigation checks that used the real SDK in 1.3.0/1.3.1 are gone from automation.
+
 ## [1.3.1] - 2026-10-12
 
 ### Changed

@@ -44,7 +44,7 @@ export class Webnat {
   // Electron registers preloads per session, not per WebContents: register once per session, found by file path so a second
   // copy of this module (or a host that registered the script itself) adds no duplicate. No teardown, as on the other platforms.
   private static registerBridge(session: Session): void {
-    const filePath = createRequire(import.meta.url).resolve('webnat-electron/preload');
+    const filePath = createRequire(import.meta.url).resolve('webnat/preload');
     if (session.getPreloadScripts().some((script) => script.type === 'frame' && script.filePath === filePath)) {
       return;
     }

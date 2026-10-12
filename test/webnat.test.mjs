@@ -79,7 +79,7 @@ test('Webnat.of is a per-WebContents singleton, tags the UA once and listens on 
 });
 
 test('Webnat.of registers the page-side bridge on the session by itself, once per session', () => {
-  const bridge = require.resolve('webnat-electron/preload');
+  const bridge = require.resolve('webnat/preload');
   const shared = createSession();
   const first = createElectronHarness({ session: shared });
   const second = createElectronHarness({ session: shared }); // another WebContents on the same session
@@ -94,7 +94,7 @@ test('Webnat.of registers the page-side bridge on the session by itself, once pe
 
 test('Webnat.of does not duplicate a bridge the host already registered', () => {
   const session = createSession();
-  session.registerPreloadScript({ type: 'frame', filePath: require.resolve('webnat-electron/preload') });
+  session.registerPreloadScript({ type: 'frame', filePath: require.resolve('webnat/preload') });
   createElectronHarness({ session });
   assert.equal(session.scripts.length, 1);
 });

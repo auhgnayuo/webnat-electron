@@ -43,7 +43,7 @@ Webnat requires a Web-side implementation and also supports other Native platfor
 
 ```typescript
 import { BrowserWindow } from 'electron';
-import { Webnat } from 'webnat-electron';
+import { Webnat } from 'webnat';
 
 const win = new BrowserWindow();
 const webnat = Webnat.of(win.webContents); // one instance per WebContents
@@ -127,7 +127,7 @@ Without a `connection`, `method` calls every connection and the first meaningful
 
 ## Notes
 
-- **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat-electron/preload` yourself, that is fine too: it is not registered twice.
+- **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat/preload` yourself, that is fine too: it is not registered twice.
 - **The UA token covers the main frame and same-origin iframes only.** `Webnat.of` uses `webContents.setUserAgent`; a cross-site iframe does not get `Webnat/` and the Web SDK stays disabled there. `app.userAgentFallback` is the lever if you need it.
 - **`onMethod` handlers must be `async`** (or return a Promise). A synchronous throw does not produce a reply, so the peer waits until its timeout.
 - **Set a `timeout` on `method` calls.** There is no cleanup API: when a `WebContents` is destroyed everything attached to it dies with it, and a call without a timeout stays pending forever.
