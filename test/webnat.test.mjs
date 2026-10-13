@@ -27,6 +27,14 @@ function createSession() {
   };
 }
 
+function createLegacySession(initialPreloads = []) {
+  let preloads = [...initialPreloads];
+  return {
+    getPreloads() { return [...preloads]; },
+    setPreloads(next) { preloads = [...next]; },
+  };
+}
+
 // `ipc` is a real EventEmitter, like `webContents.ipc`: only listeners registered on the exact channel fire.
 function createWebContents(session = createSession()) {
   const ipc = new EventEmitter();
@@ -90,6 +98,19 @@ test('Webnat.of registers the page-side bridge on the session by itself, once pe
   assert.equal(alone.session.scripts.length, 1);
   assert.equal(Webnat.of(alone.webContents), alone.webnat);
   assert.equal(alone.session.scripts.length, 1, 'asking again for the same WebContents registers nothing');
+});
+
+test('Webnat.of uses Electron 22 session preload APIs and does not duplicate an existing path', () => {
+  const bridge = require.resolve('webnat/preload');
+  const session = createLegacySession();
+  createElectronHarness({ session });
+  assert.deepEqual(session.getPreloads(), [bridge]);
+  createElectronHarness({ session });
+  assert.deepEqual(session.getPreloads(), [bridge]);
+
+  const alreadyRegistered = createLegacySession([bridge, '/host/preload.cjs']);
+  createElectronHarness({ session: alreadyRegistered });
+  assert.deepEqual(alreadyRegistered.getPreloads(), [bridge, '/host/preload.cjs']);
 });
 
 test('Webnat.of does not duplicate a bridge the host already registered', () => {

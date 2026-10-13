@@ -1,6 +1,6 @@
 # Webnat
 
-[![Electron](https://img.shields.io/badge/Electron-44.7.0%20tested-47848F.svg)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-22.0.2%20tested-47848F.svg)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -10,7 +10,7 @@ A lightweight WebContents-Native bridge library for Electron. Supports multiple 
 
 ## Features
 
-- **Electron Support** - Tested on Electron 44.7.0 (macOS arm64); the page side runs in the default sandbox
+- **Electron Support** - Tested on Electron 22.0.2 (macOS arm64); the page side runs in the default sandbox
 - **iframe Support** - Messages of iframes are forwarded through the top frame (done by the Web SDK)
 - **Three Communication Modes** - Bidirectional raw messages, broadcast messages, and method calls (RPC)
 - **Timeout & Cancellation** - Built-in timeout control and cancellation through the standard `AbortSignal`
@@ -24,7 +24,7 @@ This package is private. Install it from the repository and pin a tag:
 npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#<tag>
 ```
 
-`electron` is an optional peer dependency (`>=44.0.0`); the main entry only uses its types.
+`electron` is an optional peer dependency (`>=22.0.0`); the main entry only uses its types.
 
 ## Related Projects
 
@@ -127,7 +127,7 @@ Without a `connection`, `method` calls every connection and the first meaningful
 
 ## Notes
 
-- **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat/preload` yourself, that is fine too: it is not registered twice.
+- **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; Electron 35+ uses `registerPreloadScript`, while older versions use `setPreloads`; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat/preload` yourself, that is fine too: it is not registered twice.
 - **The UA token covers the main frame and same-origin iframes only.** `Webnat.of` uses `webContents.setUserAgent`; a cross-site iframe does not get `Webnat/` and the Web SDK stays disabled there. `app.userAgentFallback` is the lever if you need it.
 - **`onMethod` handlers must be `async`** (or return a Promise). A synchronous throw does not produce a reply, so the peer waits until its timeout.
 - **Set a `timeout` on `method` calls.** There is no cleanup API: when a `WebContents` is destroyed everything attached to it dies with it, and a call without a timeout stays pending forever.
@@ -139,7 +139,7 @@ Without a `connection`, `method` calls every connection and the first meaningful
 npm install
 npm run build        # tsup: dist/ (cjs + esm + d.ts) and dist/preload/index.cjs
 npm run typecheck
-npm test             # build + unit tests + a real Electron 44.7.0 integration run
+npm test             # build + unit tests + a real Electron 22.0.2 integration run
 ```
 
 Set `WEBNAT_SKIP_ELECTRON=1` to skip the Electron integration test on a machine without the Electron binary.

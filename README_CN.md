@@ -1,6 +1,6 @@
 # Webnat
 
-[![Electron](https://img.shields.io/badge/Electron-44.7.0%20tested-47848F.svg)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-22.0.2%20tested-47848F.svg)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -10,7 +10,7 @@
 
 ## 特性
 
-- **Electron 支持** - 在 Electron 44.7.0（macOS arm64）上验证；页面侧运行在默认沙箱中
+- **Electron 支持** - 在 Electron 22.0.2（macOS arm64）上验证；页面侧运行在默认沙箱中
 - **iframe 支持** - iframe 的消息经主框架转发（由 Web SDK 完成）
 - **三种通信模式** - 双向原始消息、广播消息和方法调用（RPC）
 - **超时与取消** - 内置超时控制，并通过标准 `AbortSignal` 取消
@@ -24,7 +24,7 @@
 npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#<tag>
 ```
 
-`electron` 是可选的 peer 依赖（`>=44.0.0`）；主入口只使用它的类型。
+`electron` 是可选的 peer 依赖（`>=22.0.0`）；主入口只使用它的类型。
 
 ## 相关项目
 
@@ -127,7 +127,7 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 
 ## 注意事项
 
-- **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat/preload`，也没关系：不会注册两次。
+- **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；Electron 35+ 使用 `registerPreloadScript`，旧版使用 `setPreloads`；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat/preload`，也没关系：不会注册两次。
 - **UA 标记只覆盖主框架与同源 iframe。** `Webnat.of` 使用 `webContents.setUserAgent`；跨站 iframe 拿不到 `Webnat/`，其中的 Web SDK 不会启用。需要时可用 `app.userAgentFallback`。
 - **`onMethod` 的 handler 必须是 `async`**（或返回 Promise）。同步抛错不会产生回复，对端会一直等到超时。
 - **`method` 调用请设置 `timeout`。** 没有清理 API：`WebContents` 销毁后，挂在它上面的一切随之失效，没有超时的调用会一直挂起。
@@ -139,7 +139,7 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 npm install
 npm run build        # tsup：dist/（cjs + esm + d.ts）与 dist/preload/index.cjs
 npm run typecheck
-npm test             # build + 单测 + 真实 Electron 44.7.0 集成测试
+npm test             # build + 单测 + 真实 Electron 22.0.2 集成测试
 ```
 
 没有 Electron 二进制的机器可设 `WEBNAT_SKIP_ELECTRON=1` 跳过集成测试。

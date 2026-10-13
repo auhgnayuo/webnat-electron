@@ -33,7 +33,7 @@ export class Webnat {
     } catch (_) {
     }
 
-    // The bridge (preload) sends on this channel.
+    // The bridge (preload) sends on this WebContents-scoped channel.
     webContents.ipc.on('__native_webnat__.postMessage', (_event, param: string): void => {
       webnat.postMessage(param);
     });
@@ -41,15 +41,36 @@ export class Webnat {
     return webnat;
   }
 
-  // Electron registers preloads per session, not per WebContents: register once per session, found by file path so a second
-  // copy of this module (or a host that registered the script itself) adds no duplicate. No teardown, as on the other platforms.
+  // Preloads are registered per session, not per WebContents. Electron 35+ has the typed registration API; older
+  // Electron versions (including 22) use setPreloads/getPreloads.
   private static registerBridge(session: Session): void {
     const filePath = createRequire(import.meta.url).resolve('webnat/preload');
-    if (session.getPreloadScripts().some((script) => script.type === 'frame' && script.filePath === filePath)) {
+    const compatibleSession = session as Session & {
+      getPreloadScripts?: () => Array<{ type: string; filePath: string }>;
+      registerPreloadScript?: (script: { type: 'frame'; filePath: string }) => unknown;
+      getPreloads?: () => string[];
+      setPreloads?: (preloads: string[]) => void;
+    };
+
+    if (compatibleSession.getPreloadScripts && compatibleSession.registerPreloadScript) {
+      if (compatibleSession.getPreloadScripts().some((script) => script.type === 'frame' && script.filePath === filePath)) {
+        return;
+      }
+      compatibleSession.registerPreloadScript({ type: 'frame', filePath });
       return;
     }
-    session.registerPreloadScript({ type: 'frame', filePath });
+
+    if (compatibleSession.getPreloads && compatibleSession.setPreloads) {
+      const preloads = compatibleSession.getPreloads();
+      if (!preloads.includes(filePath)) {
+        compatibleSession.setPreloads([...preloads, filePath]);
+      }
+      return;
+    }
+
+    throw new Error('This Electron version does not support session preload registration');
   }
+
 
   private constructor(webContents: WebContents) {
     this.webContentsRef = new WeakRef(webContents);

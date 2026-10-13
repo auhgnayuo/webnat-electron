@@ -54,16 +54,18 @@ const otherOrigin = http.createServer(plain);
 
   await check('Webnat.of registers the bridge itself: two WebContents on a fresh session share one registration and both pages get the bridge', async () => {
     const fresh = session.fromPartition('webnat-fresh');
-    assert.equal(fresh.getPreloadScripts().length, 0, 'precondition: nothing registered on the new session');
+    const getRegisteredPreloads = () => typeof fresh.getPreloadScripts === 'function'
+      ? fresh.getPreloadScripts().map((script) => script.filePath)
+      : fresh.getPreloads();
+    assert.equal(getRegisteredPreloads().length, 0, 'precondition: nothing registered on the new session');
     const w1 = new BrowserWindow({ show: false, webPreferences: { session: fresh } });
     const w2 = new BrowserWindow({ show: false, webPreferences: { session: fresh } });
     try {
       Webnat.of(w1.webContents);
       Webnat.of(w2.webContents);
-      const scripts = fresh.getPreloadScripts();
+      const scripts = getRegisteredPreloads();
       assert.equal(scripts.length, 1, 'one registration per session, not one per WebContents');
-      assert.equal(scripts[0].type, 'frame');
-      assert.equal(scripts[0].filePath, path.join(distDir, 'preload/index.cjs'));
+      assert.equal(scripts[0], path.join(distDir, 'preload/index.cjs'));
       await Promise.all([w1.webContents.loadURL(base + '/plain.html'), w2.webContents.loadURL(base + '/plain.html')]);
       const seen = await Promise.all([w1, w2].map((w) => w.webContents.executeJavaScript('typeof window.__native_webnat__')));
       assert.deepEqual(seen, ['object', 'object']);

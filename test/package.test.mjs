@@ -27,15 +27,21 @@ test('the CommonJS entry exposes the same surface', () => {
 });
 
 for (const [label, load] of [['ESM', () => import('webnat')], ['CommonJS', async () => require('webnat')]]) {
-  test(`the ${label} build finds and registers the bridge preload through its own exports`, async () => {
+  test(`the ${label} build finds and registers the bridge preload with both Electron session APIs`, async () => {
     const { Webnat } = await load();
-    const registered = [];
-    const session = {
-      getPreloadScripts: () => registered,
-      registerPreloadScript: (script) => { registered.push({ ...script, id: String(registered.length) }); return String(registered.length); },
+    const bridge = require.resolve('webnat/preload');
+    const modernRegistrations = [];
+    const modernSession = {
+      getPreloadScripts: () => modernRegistrations,
+      registerPreloadScript: (script) => { modernRegistrations.push({ ...script, id: String(modernRegistrations.length) }); return String(modernRegistrations.length); },
     };
-    Webnat.of({ ipc: new EventEmitter(), session, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
-    assert.deepEqual(registered.map(({ type, filePath }) => ({ type, filePath })), [{ type: 'frame', filePath: require.resolve('webnat/preload') }]);
+    Webnat.of({ ipc: new EventEmitter(), session: modernSession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
+    assert.deepEqual(modernRegistrations.map(({ type, filePath }) => ({ type, filePath })), [{ type: 'frame', filePath: bridge }]);
+
+    let legacyPreloads = [];
+    const legacySession = { getPreloads: () => [...legacyPreloads], setPreloads: (next) => { legacyPreloads = [...next]; } };
+    Webnat.of({ ipc: new EventEmitter(), session: legacySession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
+    assert.deepEqual(legacyPreloads, [bridge]);
   });
 }
 
