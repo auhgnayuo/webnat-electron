@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "electron": ["./example/node_modules/electron/electron.d.ts"]
+    },
+    "typeRoots": ["./node_modules/@types"]
+  },
+  "include": ["../src/**/*.ts"]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "webnat-electron-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Electron host example for webnat-web",
+  "main": "main.cjs",
+  "scripts": {
+    "clean:webnat": "node -e \"require('node:fs').rmSync('../dist', { recursive: true, force: true })\"",
+    "build:webnat": "npm run clean:webnat && tsup --config tsup.webnat.config.ts",
+    "start": "npm run build:webnat && node run.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "electron": "^22.0.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "type": "module"
+}

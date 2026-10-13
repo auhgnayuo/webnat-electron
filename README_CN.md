@@ -133,6 +133,19 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 - **`method` 调用请设置 `timeout`。** 没有清理 API：`WebContents` 销毁后，挂在它上面的一切随之失效，没有超时的调用会一直挂起。
 - **abort 监听器里抛出的异常**会以 `uncaughtException` 到达 Node（原生 `AbortSignal` 语义）。给 handler 的 `signal` 添加监听器时请自行 `try/catch`。
 
+## 示例程序
+
+`example/` 是独立的 Electron 示例应用：在同一个宿主窗口中用 Electron `BrowserView` 内嵌现有的 `webnat-web/example`，并提供 Native 控制区和通信日志。
+
+默认要求 `webnat-web` 仓库与本仓库并列。先安装 Web 示例依赖，再单独安装并运行 Electron 示例：
+
+```bash
+cd ../webnat-web/example && npm install
+cd ../../webnat-electron/example && npm install && npm start
+```
+
+如果 webnat-web 示例在其他位置，可设置 `WEBNAT_WEB_EXAMPLE_DIR=/path/to/webnat-web/example`。如果已有运行中的或已部署的 Web 示例，可设置 `WEBNAT_WEB_EXAMPLE_URL`（例如 `http://127.0.0.1:5173/`）；此时 runner 不会再启动 Vite。
+
 ## 开发
 
 ```bash

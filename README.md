@@ -133,6 +133,19 @@ Without a `connection`, `method` calls every connection and the first meaningful
 - **Set a `timeout` on `method` calls.** There is no cleanup API: when a `WebContents` is destroyed everything attached to it dies with it, and a call without a timeout stays pending forever.
 - **An exception thrown by an abort listener** reaches Node as an `uncaughtException` (native `AbortSignal` semantics). Wrap listeners you add to a handler's `signal` in `try/catch`.
 
+## Example App
+
+`example/` is a small, separate Electron app. It embeds the existing `webnat-web/example` in an Electron `BrowserView` and places the Native controls and message log in the same host window.
+
+The runner expects the `webnat-web` repository next to this one. Install the Web example once, then the Electron example installs and builds its own dependencies independently:
+
+```bash
+cd ../webnat-web/example && npm install
+cd ../../webnat-electron/example && npm install && npm start
+```
+
+To use another local checkout, set `WEBNAT_WEB_EXAMPLE_DIR=/path/to/webnat-web/example`. To load an already running or deployed web example instead, set `WEBNAT_WEB_EXAMPLE_URL` (for example `http://127.0.0.1:5173/`); the runner will not start Vite in that case.
+
 ## Development
 
 ```bash

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webnat Native 控制台</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">ELECTRON NATIVE</p>
+        <h1>Webnat 控制台</h1>
+      </div>
+      <span id="connection" class="status">等待连接</span>
+    </header>
+
+    <section class="controls">
+      <p class="section-title">Native → Web</p>
+      <div class="actions">
+        <button data-action="sendRaw">发送 Raw</button>
+        <button data-action="sendBroadcast">发送 Broadcast</button>
+        <button data-action="sendMethod">调用 Web Method</button>
+      </div>
+      <p class="hint">Web 页面加载完成并建立连接后，可从这里发送消息。</p>
+    </section>
+
+    <section class="activity">
+      <div class="activity-header">
+        <div>
+          <p class="section-title">通信日志</p>
+          <p id="url" class="url"></p>
+        </div>
+        <button id="clear" class="clear">清空</button>
+      </div>
+      <div id="logs" class="logs" aria-live="polite"></div>
+    </section>
+
+    <script src="panel.js"></script>
+  </body>
+</html>
