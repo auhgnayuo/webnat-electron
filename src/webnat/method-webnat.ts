@@ -216,8 +216,14 @@ export class MethodWebnat {
           const replyMessage = Message.reply(connection.id, id, undefined, error.toJson());
           (connection as ConnectionImpl).trySend(replyMessage);
         } else {
-          const replyMessage = Message.reply(connection.id, id, result, undefined);
-          (connection as ConnectionImpl).trySend(replyMessage);
+          const conn = connection as ConnectionImpl;
+          conn.send(Message.reply(connection.id, id, result, undefined)).catch((err: any): void => {
+            // A result that cannot be serialized is answered with the error, or the caller waits for its timeout.
+            const w = WebnatError.from(err);
+            if (w?.code === WebnatErrorCode.SERIALIZATION_FAILED) {
+              void conn.trySend(Message.reply(connection.id, id, undefined, w.toJson()));
+            }
+          });
         }
       };
 
@@ -252,13 +258,13 @@ export class MethodWebnat {
         (connection as ConnectionImpl).trySend(notifyMessage);
       };
 
-      const listenerPromise: Promise<any> = listener(param, abortController.signal, notify, connection);
-      await listenerPromise.then((result: any): void => {
-        complete(result, null);
-      }).catch((err: any): void => {
+      // `await` inside the try, like the Web SDK: a synchronous throw is answered like a rejection.
+      try {
+        complete(await listener(param, abortController.signal, notify, connection), null);
+      } catch (err) {
         const w = WebnatError.from(err);
         complete(undefined, w ?? new WebnatError(WebnatErrorCode.UNKNOWN, 'Unknown Error'));
-      });
+      }
       return;
     }
   };

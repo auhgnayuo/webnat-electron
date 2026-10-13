@@ -73,6 +73,34 @@ const otherOrigin = http.createServer(plain);
     } finally { w1.destroy(); w2.destroy(); }
   });
 
+  await check('a crashed renderer and a destroyed WebContents end the connections: a pending call with no timeout rejects with CLOSED', async () => {
+    const NATIVE_UUID = '00000000-0000-0000-0000-000000000000';
+    const until = async (condition) => { for (let i = 0; i < 100 && !condition(); i++) await new Promise((r) => setTimeout(r, 30)); assert.ok(condition(), 'timed out'); };
+    const seen = {};
+    for (const how of ['crash', 'destroy']) {
+      const w = new BrowserWindow({ show: false, webPreferences: { session: session.fromPartition('webnat-end-' + how) } });
+      try {
+        const webnat = Webnat.of(w.webContents);
+        await w.loadURL(base + '/plain.html');
+        // No Web SDK here: speak the protocol through the real bridge, as the SDK would.
+        const open = JSON.stringify({ magic: 'WEBNAT', from: 'conn-' + how, to: NATIVE_UUID, open: { param: { origin: base, isMainframe: true } } });
+        await w.webContents.executeJavaScript(`window.__native_webnat__.postMessage(${JSON.stringify(open)})`);
+        await until(() => webnat.getConnections().size === 1);
+        const pending = webnat.method({ method: 'never-returns' }, undefined, webnat.getConnections().get('conn-' + how)).then(() => 'resolved', (e) => e.code);
+        if (how === 'crash') {
+          if (typeof w.webContents.forcefullyCrashRenderer === 'function') w.webContents.forcefullyCrashRenderer(); else process.kill(w.webContents.getOSProcessId(), 'SIGKILL');
+        } else {
+          w.destroy();
+        }
+        const code = await Promise.race([pending, new Promise((r) => setTimeout(() => r('still pending after 5s'), 5000))]);
+        assert.equal(code, -1004, how + ': the pending call ended with ' + code);
+        assert.equal(webnat.getConnections().size, 0, how + ': the dead connection is gone');
+        seen[how] = { code, connections: webnat.getConnections().size };
+      } finally { if (!w.isDestroyed()) w.destroy(); }
+    }
+    return seen;
+  });
+
   console.log('RESULT ' + JSON.stringify({ name: 'summary', ok: failed === 0, detail: 'electron ' + process.versions.electron }));
   app.exit(failed ? 1 : 0);
 })().catch((e) => { console.log('RESULT ' + JSON.stringify({ name: 'fatal', ok: false, detail: String((e && e.stack) || e).slice(0, 1200) })); app.exit(3); });

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-13
+
+### Added
+
+- **`onRenderProcessGone()`**: tells Webnat that the render process behind the `WebContents` has exited (crash, or the `WebContents` is destroyed); Webnat then ends the page's connections itself. Same semantics on Android, Darwin, OHOS and Electron. The method is named after each platform's own hook: `webViewWebContentProcessDidTerminate` on Darwin, `onRenderProcessGone` on Android and Electron, `onRenderExited` on OHOS. `Webnat.of` calls it by itself when the `WebContents` emits `render-process-gone` or `destroyed`, so an Electron host does nothing.
+
+### Fixed
+
+- A method handler that throws synchronously now makes the caller receive an error reply instead of waiting for its timeout. A plain (non-Promise) return value is taken as the result.
+- A failed send is no longer swallowed: `method` rejects at once with `SERIALIZATION_FAILED` when the parameter cannot be serialized and with `CLOSED` when the `WebContents` is destroyed, and an `executeJavaScript` error rejects the call with that error.
+- A method result that cannot be serialized is answered with a `SERIALIZATION_FAILED` error reply instead of being dropped.
+- A call without a timeout no longer stays pending after the renderer crashed or the `WebContents` was destroyed: the connection ends, the call rejects with `CLOSED` and the alive-keeper timer stops.
+
 ## [1.3.2] - 2026-10-12
 
 ### Changed

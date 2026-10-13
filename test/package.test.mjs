@@ -35,12 +35,12 @@ for (const [label, load] of [['ESM', () => import('webnat')], ['CommonJS', async
       getPreloadScripts: () => modernRegistrations,
       registerPreloadScript: (script) => { modernRegistrations.push({ ...script, id: String(modernRegistrations.length) }); return String(modernRegistrations.length); },
     };
-    Webnat.of({ ipc: new EventEmitter(), session: modernSession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
+    Webnat.of({ ipc: new EventEmitter(), on() {}, once() {}, session: modernSession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
     assert.deepEqual(modernRegistrations.map(({ type, filePath }) => ({ type, filePath })), [{ type: 'frame', filePath: bridge }]);
 
     let legacyPreloads = [];
     const legacySession = { getPreloads: () => [...legacyPreloads], setPreloads: (next) => { legacyPreloads = [...next]; } };
-    Webnat.of({ ipc: new EventEmitter(), session: legacySession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
+    Webnat.of({ ipc: new EventEmitter(), on() {}, once() {}, session: legacySession, getUserAgent: () => '', setUserAgent() {}, getURL: () => 'about:blank', async executeJavaScript() {} });
     assert.deepEqual(legacyPreloads, [bridge]);
   });
 }

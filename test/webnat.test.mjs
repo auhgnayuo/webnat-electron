@@ -36,22 +36,27 @@ function createLegacySession(initialPreloads = []) {
 }
 
 // `ipc` is a real EventEmitter, like `webContents.ipc`: only listeners registered on the exact channel fire.
+// The WebContents itself is one too, like Electron's: `Webnat.of` listens to `render-process-gone` and `destroyed`.
 function createWebContents(session = createSession()) {
   const ipc = new EventEmitter();
   const executedMessages = [];
-  const webContents = {
+  const webContents = Object.assign(new EventEmitter(), {
     ipc,
     session,
     userAgent: 'Chromium/1.0 MiniProgram/3.0.2 Webnat/1.2.0',
+    destroyed: false,
+    executeJavaScriptError: undefined,
     getUserAgent() { return this.userAgent; },
     setUserAgent(value) { this.userAgent = value; },
     getURL() { return 'https://demo.example/app/'; },
+    isDestroyed() { return this.destroyed; },
     async executeJavaScript(script) {
+      if (this.executeJavaScriptError) throw this.executeJavaScriptError;
       const prefix = 'window.__web_webnat__.receive(...';
       assert.ok(script.startsWith(prefix));
       executedMessages.push(...JSON.parse(script.slice(prefix.length, -1)));
     },
-  };
+  });
   return { webContents, ipc, session, executedMessages };
 }
 
@@ -358,6 +363,108 @@ test('the JavaScript alive keeper runs only while a method call is in flight', a
   h.sendFromRenderer(asWebMessage(Message.reply(NATIVE, invoke.invoke.id, 'done'), 'main'));
   assert.equal(await pending, 'done');
   assert.equal(keeper.timer, undefined);
+});
+
+test('incoming invoke: a handler that throws synchronously is answered with an error reply, a plain return value with its result', async () => {
+  const h = createElectronHarness();
+  connect(h, 'main');
+  const invoke = (id, method) => h.sendFromRenderer(asWebMessage(Message.invoke(NATIVE, id, method), 'main'));
+  const replyOf = id => h.executedMessages.find(m => m.reply?.id === id)?.reply;
+
+  h.webnat.onMethod('throws-sync', () => { throw new Error('boom'); });
+  h.webnat.onMethod('throws-webnat-error', () => { throw new WebnatError(123, 'denied'); });
+  h.webnat.onMethod('plain-value', () => ({ plain: true }));
+  invoke('call-1', 'throws-sync');
+  invoke('call-2', 'throws-webnat-error');
+  invoke('call-3', 'plain-value');
+  await tick();
+  assert.deepEqual(replyOf('call-1').error, { code: WebnatErrorCode.UNKNOWN, message: 'boom' });
+  assert.deepEqual(replyOf('call-2').error, { code: 123, message: 'denied' });
+  assert.deepEqual(replyOf('call-3'), { id: 'call-3', result: { plain: true } });
+});
+
+test('a failed send is visible: method() rejects at once instead of waiting for its timeout', async () => {
+  const h = createElectronHarness();
+  const connection = connect(h, 'main');
+  const circular = {};
+  circular.self = circular;
+  for (const param of [10n, circular]) {
+    await assert.rejects(h.webnat.method({ method: 'x', param }, { timeout: 2000 }, connection),
+      error => error.code === WebnatErrorCode.SERIALIZATION_FAILED);
+  }
+
+  h.webContents.executeJavaScriptError = new Error('Script failed to execute');
+  await assert.rejects(h.webnat.method({ method: 'x' }, { timeout: 2000 }, connection),
+    error => error instanceof WebnatError && error.message === 'Script failed to execute');
+  h.webContents.executeJavaScriptError = undefined;
+
+  h.webContents.destroyed = true;
+  await assert.rejects(h.webnat.method({ method: 'x' }, { timeout: 2000 }, connection),
+    error => error.code === WebnatErrorCode.CLOSED);
+  assert.equal(h.webnat.javaScriptAliveKeeper.timer, undefined);
+});
+
+test('raw and broadcast stay best-effort: an unserializable payload is dropped without throwing', async () => {
+  const h = createElectronHarness();
+  const connection = connect(h, 'main');
+  const before = h.executedMessages.length;
+  h.webnat.raw(10n, connection);
+  h.webnat.broadcast('evt', 10n, connection);
+  await tick();
+  assert.equal(h.executedMessages.length, before);
+});
+
+test('an unserializable handler result is answered with SERIALIZATION_FAILED instead of being dropped', async () => {
+  const h = createElectronHarness();
+  connect(h, 'main');
+  h.webnat.onMethod('big', async () => 10n);
+  h.sendFromRenderer(asWebMessage(Message.invoke(NATIVE, 'big-1', 'big'), 'main'));
+  await tick();
+  const reply = h.executedMessages.find(m => m.reply?.id === 'big-1')?.reply;
+  assert.equal(reply?.error?.code, WebnatErrorCode.SERIALIZATION_FAILED);
+  assert.equal(reply?.result, undefined);
+});
+
+test('onRenderProcessGone ends pending calls with CLOSED, aborts running handlers without a reply, and a reload can open again', async () => {
+  const h = createElectronHarness();
+  const main = connect(h, 'main');
+  connect(h, 'frame-1', { origin: 'https://demo.example', isMainframe: false });
+  const signals = [];
+  h.webnat.onMethod('long-task', (_param, signal) => { signals.push(signal); return new Promise(() => {}); });
+  h.sendFromRenderer(asWebMessage(Message.invoke(NATIVE, 'long-1', 'long-task'), 'main'));
+  const pending = h.webnat.method({ method: 'never-returns' }, undefined, main); // no timeout: only CLOSE can end it
+  assert.notEqual(h.webnat.javaScriptAliveKeeper.timer, undefined);
+  const sent = h.executedMessages.length;
+
+  h.webnat.onRenderProcessGone();
+  await assert.rejects(pending, error => error.code === WebnatErrorCode.CLOSED);
+  assert.equal(signals[0].aborted, true);
+  assert.equal(h.webnat.getConnections().size, 0);
+  assert.equal(main.closed, true);
+  assert.equal(h.webnat.javaScriptAliveKeeper.timer, undefined);
+  await tick();
+  assert.equal(h.executedMessages.length, sent, 'nothing is sent to the page');
+  assert.equal(h.executedMessages.some(m => m.reply), false);
+
+  h.webnat.onRenderProcessGone(); // idempotent
+  const reopened = connect(h, 'main-2'); // the reloaded page
+  assert.equal(h.webnat.getConnections().size, 1);
+  assert.equal(reopened.closed, false);
+  h.webnat.raw('hello', reopened);
+  assert.deepEqual(h.executedMessages.at(-1).raw, { param: 'hello' });
+});
+
+test('Webnat.of ends the connections by itself when the renderer is gone or the WebContents is destroyed', async () => {
+  for (const [event, args] of [['render-process-gone', [{}, { reason: 'crashed', exitCode: 11 }]], ['destroyed', []]]) {
+    const h = createElectronHarness();
+    const connection = connect(h, 'main');
+    const pending = h.webnat.method({ method: 'never-returns' }, undefined, connection);
+    h.webContents.emit(event, ...args);
+    await assert.rejects(pending, error => error.code === WebnatErrorCode.CLOSED, event);
+    assert.equal(h.webnat.getConnections().size, 0, event);
+    assert.equal(connection.closed, true, event);
+    assert.equal(h.webnat.javaScriptAliveKeeper.timer, undefined, event);
+  }
 });
 
 function loadPreload({ isMainFrame }) {

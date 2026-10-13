@@ -120,6 +120,15 @@ controller.abort(); // rejects with a WebnatError (code CANCELLED) and tells the
 
 Without a `connection`, `method` calls every connection and the first meaningful response wins; "unimplemented" and "closed" replies only eliminate a candidate.
 
+### 4. Send failures and handler errors
+
+- A failed send is visible to the caller that waits for it: `method` rejects at once with `SERIALIZATION_FAILED` when the parameter cannot be serialized, and with `CLOSED` when the `WebContents` is destroyed or the connection is closed. An error from `executeJavaScript` (for example the page has no Web SDK any more) rejects the call with that error. `raw` and `broadcast` stay fire-and-forget.
+- A method handler that fails (throws, or rejects) is answered with an error reply `{ code, message }` (code -1 for an error without one), so the caller never waits for its timeout because of a handler bug. A result that cannot be serialized is answered with `SERIALIZATION_FAILED`.
+
+### 5. Page crash and teardown
+
+When a page unloads normally, the Web SDK sends CLOSE and Webnat ends that connection. A crashed render process or a destroyed `WebContents` never gets to send it, so `Webnat.of` listens for `render-process-gone` and `destroyed` and calls `webnat.onRenderProcessGone()` for you; there is nothing to wire up. (On the other platforms the host forwards its own hook to the method named after it: Android `onRenderProcessGone`, Darwin `webViewWebContentProcessDidTerminate`, OHOS `onRenderExited`.) Webnat then ends the page's connections itself: pending `method` calls reject with `CLOSED` and running method handlers are aborted. Nothing is sent to the page, and Webnat stays usable, so a reloaded page opens new connections as usual.
+
 ## How It Works
 
 - **Web → Native**: `window.__native_webnat__.postMessage(string)` (exposed by the preload that `Webnat.of` registers; it forwards strings and nothing else and never exposes `ipcRenderer`) → `ipcRenderer.send('__native_webnat__.postMessage')` → the `webContents.ipc` listener installed by `Webnat.of`.
@@ -129,8 +138,7 @@ Without a `connection`, `method` calls every connection and the first meaningful
 
 - **The bridge is registered per session, once, and never removed.** Electron attaches preloads to a session, not to a `WebContents`, so the first `Webnat.of` on a session registers it and later ones (found by file path) add nothing; Electron 35+ uses `registerPreloadScript`, while older versions use `setPreloads`; it stays for the life of the session, as the other platforms' bridges stay for the life of the WebView. It exposes the bridge to the top frame only, even when you enable `nodeIntegrationInSubFrames`. If you already registered `webnat/preload` yourself, that is fine too: it is not registered twice.
 - **The UA token covers the main frame and same-origin iframes only.** `Webnat.of` uses `webContents.setUserAgent`; a cross-site iframe does not get `Webnat/` and the Web SDK stays disabled there. `app.userAgentFallback` is the lever if you need it.
-- **`onMethod` handlers must be `async`** (or return a Promise). A synchronous throw does not produce a reply, so the peer waits until its timeout.
-- **Set a `timeout` on `method` calls.** There is no cleanup API: when a `WebContents` is destroyed everything attached to it dies with it, and a call without a timeout stays pending forever.
+- **Set a `timeout` on `method` calls.** A call ends when the page answers, when it times out or is aborted, or when its connection ends (the page unloaded, the renderer crashed, the `WebContents` was destroyed). A call without a timeout on a page that stays alive but never answers stays pending forever.
 - **An exception thrown by an abort listener** reaches Node as an `uncaughtException` (native `AbortSignal` semantics). Wrap listeners you add to a handler's `signal` in `try/catch`.
 
 ## Example App

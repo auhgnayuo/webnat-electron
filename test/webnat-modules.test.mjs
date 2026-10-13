@@ -139,6 +139,53 @@ test('MethodWebnat.receive answers a registered invoke with its result', async (
   assert.equal(out[0].reply?.error, undefined);
 });
 
+test('MethodWebnat.receive answers a handler that throws synchronously with an error reply, and takes a plain return value as the result', async () => {
+  const mw = new MethodWebnat();
+  mw.on('throws', () => { throw new WebnatError(123, 'boom'); });
+  mw.on('plain-return', () => ({ v: 2 }));
+  const out = [];
+  const connection = silentConnection('conn-1', out);
+  await mw.receive(new Message('conn-1', NATIVE, undefined, undefined, undefined, undefined, new Invoke('rid-3', 'throws')), connection);
+  await mw.receive(new Message('conn-1', NATIVE, undefined, undefined, undefined, undefined, new Invoke('rid-4', 'plain-return')), connection);
+  assert.deepEqual(out.map(m => [m.reply?.id, m.reply?.result, m.reply?.error]), [
+    ['rid-3', undefined, { code: 123, message: 'boom' }],
+    ['rid-4', { v: 2 }, undefined],
+  ]);
+});
+
+test('MethodWebnat.receive answers an unserializable result with a SERIALIZATION_FAILED reply; other send failures stay best-effort', async () => {
+  const mw = new MethodWebnat();
+  mw.on('big', async () => 'a result the transport cannot serialize');
+  const invoke = id => new Message('conn-1', NATIVE, undefined, undefined, undefined, undefined, new Invoke(id, 'big'));
+
+  const out = [];
+  const unserializable = new ConnectionImpl('conn-1', {}, undefined, async m => {
+    if (m.reply && m.reply.result !== undefined) throw WebnatError.serializationFailed('BigInt');
+    out.push(m);
+  });
+  await mw.receive(invoke('rid-5'), unserializable);
+  await sleep(5);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].reply?.id, 'rid-5');
+  assert.equal(out[0].reply?.result, undefined);
+  assert.equal(WebnatError.from(out[0].reply?.error)?.code, WebnatErrorCode.SERIALIZATION_FAILED);
+
+  const sent = [];
+  const gone = new ConnectionImpl('conn-1', {}, undefined, async m => { sent.push(m); throw WebnatError.closed(); });
+  await mw.receive(invoke('rid-6'), gone);
+  await sleep(5);
+  assert.equal(sent.length, 1, 'only the original reply was tried; no fallback for a failure that is not about serialization');
+});
+
+test('ConnectionImpl.send surfaces a failing transport, trySend swallows it', async () => {
+  const failing = new ConnectionImpl('conn-1', {}, undefined, async () => { throw WebnatError.serializationFailed('x'); });
+  await assert.rejects(failing.send(Message.raw('conn-1', 1)), error => error.code === WebnatErrorCode.SERIALIZATION_FAILED);
+  await failing.trySend(Message.raw('conn-1', 1));
+  failing.dispose();
+  await assert.rejects(failing.send(Message.raw('conn-1', 1)), error => error.code === WebnatErrorCode.CLOSED);
+  await failing.trySend(Message.raw('conn-1', 1));
+});
+
 test('BroadcastWebnat ignores an empty name and dispatches a valid broadcast', () => {
   const bw = new BroadcastWebnat();
   const hits = [];

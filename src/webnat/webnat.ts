@@ -3,6 +3,7 @@ import type { Session, WebContents } from 'electron';
 import { BroadcastMethodCall } from './broadcast-method-call.js';
 import { BroadcastWebnat } from './broadcast-webnat.js';
 import { Connection, ConnectionImpl } from './connection.js';
+import { WebnatError } from './error.js';
 import { JavaScriptAliveKeeper } from './javaScriptAliveKeeper.js';
 import { Message } from './message.js';
 import { MethodFunc, MethodOptions, MethodWebnat } from './method-webnat.js';
@@ -36,6 +37,15 @@ export class Webnat {
     // The bridge (preload) sends on this WebContents-scoped channel.
     webContents.ipc.on('__native_webnat__.postMessage', (_event, param: string): void => {
       webnat.postMessage(param);
+    });
+
+    // The page's own `pagehide` -> CLOSE never arrives when the renderer crashes or the WebContents is destroyed.
+    // Electron tells the main process about both, so the host never has to call `onRenderProcessGone` itself.
+    webContents.on('render-process-gone', (): void => {
+      webnat.onRenderProcessGone();
+    });
+    webContents.once('destroyed', (): void => {
+      webnat.onRenderProcessGone();
     });
 
     return webnat;
@@ -90,6 +100,19 @@ export class Webnat {
 
   getConnections(): Map<string, Connection> {
     return new Map(this.connections);
+  }
+
+  // The render process behind this WebContents has exited (crash, or the WebContents is destroyed). The page can no
+  // longer send its CLOSE, so end every connection here: pending `method` calls reject with CLOSED and running handlers
+  // are aborted. Nothing is sent to the page and the instance stays usable: a reloaded page opens new connections.
+  // `Webnat.of` calls this itself on `render-process-gone` and `destroyed`; the other platforms' hosts call the method
+  // named after their own hook (Android `onRenderProcessGone`, Darwin `webViewWebContentProcessDidTerminate`, OHOS `onRenderExited`).
+  onRenderProcessGone(): void {
+    // Mark and remove every connection first, then notify: callbacks see the state with everything already closed.
+    const closing = Array.from(this.connections.values());
+    this.connections.clear();
+    closing.forEach((connection) => (connection as ConnectionImpl).dispose());
+    closing.forEach((connection) => this.onConnectionClose(connection));
   }
 
   onRaw(listener: (raw: any, connection: Connection) => void): void {
@@ -218,16 +241,22 @@ export class Webnat {
         const url = this.getWebContents()?.getURL();
         const connection = new ConnectionImpl(from, attributes, url, async (messageToSend: Message): Promise<void> => {
           const webContents = this.getWebContents();
-          if (!webContents) {
-            return;
+          if (!webContents || webContents.isDestroyed()) {
+            throw WebnatError.closed();
           }
+          let string: string;
           try {
             // Serialize the protocol dictionary, never the Message instance (same as OHOS/Android).
-            const string = JSON.stringify([messageToSend.toDictionary()]);
-            this.javaScriptAliveKeeper.delay();
-            const js = `window.__web_webnat__.receive(...${string})`;
+            string = JSON.stringify([messageToSend.toDictionary()]);
+          } catch (error) {
+            throw WebnatError.serializationFailed(error);
+          }
+          this.javaScriptAliveKeeper.delay();
+          const js = `window.__web_webnat__.receive(...${string})`;
+          try {
             await webContents.executeJavaScript(js);
           } catch (error) {
+            throw WebnatError.from(error) ?? WebnatError.closed();
           }
         });
         this.onConnectionOpen(connection);

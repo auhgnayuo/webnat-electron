@@ -120,6 +120,15 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 
 不传 `connection` 时，`method` 会调用所有连接，第一个有意义的响应胜出；「未实现」与「已关闭」的回复只会淘汰对应候选。
 
+### 4. 发送失败与 handler 错误
+
+- 发送失败会让等待它的调用方知道：参数无法序列化时，`method` 立即以 `SERIALIZATION_FAILED` 失败；`WebContents` 已销毁或连接已关闭时以 `CLOSED` 失败。`executeJavaScript` 报错（例如页面里已经没有 Web SDK）时，调用以该错误失败。`raw`、`broadcast` 仍是发出即忘。
+- method handler 失败（抛出异常或 reject）时，对端会收到错误回复 `{ code, message }`（没有 code 的错误为 -1），不会因 handler 的 bug 一直等到超时。结果无法序列化时，回复 `SERIALIZATION_FAILED`。
+
+### 5. 页面崩溃与销毁
+
+页面正常卸载时，Web SDK 会发送 CLOSE，Webnat 随之结束该连接。渲染进程崩溃或 `WebContents` 被销毁时页面没有机会发送，所以 `Webnat.of` 会监听 `render-process-gone` 和 `destroyed`，自动调用 `webnat.onRenderProcessGone()`，无需任何接入代码。（其他平台由宿主把自己的回调转给同名方法：Android `onRenderProcessGone`、Darwin `webViewWebContentProcessDidTerminate`、OHOS `onRenderExited`。）Webnat 会自行结束该页面的所有连接：待完成的 `method` 调用以 `CLOSED` 失败，正在执行的 method handler 收到取消。不会向页面发送任何消息，Webnat 仍可继续使用，页面重新加载后会照常建立新连接。
+
 ## 工作原理
 
 - **Web → Native**：`window.__native_webnat__.postMessage(string)`（由 `Webnat.of` 注册的 preload 暴露，只转发字符串，从不暴露 `ipcRenderer`）→ `ipcRenderer.send('__native_webnat__.postMessage')` → `Webnat.of` 安装在 `webContents.ipc` 上的监听。
@@ -129,8 +138,7 @@ controller.abort(); // 以 WebnatError（code 为 CANCELLED）reject，并通知
 
 - **桥按 session 注册一次，且不会移除。** Electron 的 preload 挂在 session 上而不是 `WebContents` 上，所以同一个 session 上第一次 `Webnat.of` 注册它，之后的（按文件路径查到已有）不会再加；Electron 35+ 使用 `registerPreloadScript`，旧版使用 `setPreloads`；它随 session 一直存在，就像其他平台的桥随 WebView 一直存在。桥只暴露给顶层框架，即使你开启了 `nodeIntegrationInSubFrames` 也一样。如果你已经自己注册过 `webnat/preload`，也没关系：不会注册两次。
 - **UA 标记只覆盖主框架与同源 iframe。** `Webnat.of` 使用 `webContents.setUserAgent`；跨站 iframe 拿不到 `Webnat/`，其中的 Web SDK 不会启用。需要时可用 `app.userAgentFallback`。
-- **`onMethod` 的 handler 必须是 `async`**（或返回 Promise）。同步抛错不会产生回复，对端会一直等到超时。
-- **`method` 调用请设置 `timeout`。** 没有清理 API：`WebContents` 销毁后，挂在它上面的一切随之失效，没有超时的调用会一直挂起。
+- **`method` 调用请设置 `timeout`。** 调用会在页面回复、超时或被取消、或其连接结束（页面卸载、渲染进程崩溃、`WebContents` 销毁）时结束。页面仍然存活却一直不回复时，没有超时的调用会一直挂起。
 - **abort 监听器里抛出的异常**会以 `uncaughtException` 到达 Node（原生 `AbortSignal` 语义）。给 handler 的 `signal` 添加监听器时请自行 `try/catch`。
 
 ## 示例程序
