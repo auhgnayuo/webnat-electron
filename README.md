@@ -21,7 +21,7 @@ A lightweight WebContents-Native bridge library for Electron. Supports multiple 
 This package is private. Install it from the repository and pin a tag:
 
 ```bash
-npm install git+ssh://git@code.comein.cn/mobile/private/electron/packages/webnat.git#<tag>
+npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#<tag>
 ```
 
 `electron` is an optional peer dependency (`>=44.0.0`); the main entry only uses its types.
