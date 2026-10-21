@@ -1,3 +1,4 @@
+import type { Param } from './json-value.js';
 import { createRequire } from 'node:module';
 import type { Session, WebContents } from 'electron';
 import { BroadcastMethodCall } from './broadcast-method-call.js';
@@ -115,27 +116,27 @@ export class Webnat {
     closing.forEach((connection) => this.onConnectionClose(connection));
   }
 
-  onRaw(listener: (raw: any, connection: Connection) => void): void {
+  onRaw(listener: (raw: Param, connection: Connection) => void): void {
     this.rawWebnat.on(listener);
   }
 
-  offRaw(listener: (raw: any, connection: Connection) => void): void {
+  offRaw(listener: (raw: Param, connection: Connection) => void): void {
     this.rawWebnat.off(listener);
   }
 
-  raw(raw: any, connection: Connection): void {
+  raw(raw: Param, connection: Connection): void {
     this.rawWebnat.raw(raw, connection);
   }
 
-  onBroadcast(name: string, listener: (params: any, connection: Connection) => void): void {
+  onBroadcast(name: string, listener: (params: Param, connection: Connection) => void): void {
     this.broadcastWebnat.on(name, listener);
   }
 
-  offBroadcast(name: string, listener: (params: any, connection: Connection) => void): void {
+  offBroadcast(name: string, listener: (params: Param, connection: Connection) => void): void {
     this.broadcastWebnat.off(name, listener);
   }
 
-  broadcast(name: string, params?: any, connection?: Connection): void {
+  broadcast(name: string, params?: Param, connection?: Connection): void {
     if (connection) {
       this.broadcastWebnat.broadcast(name, params ?? null, connection);
       return;
@@ -147,33 +148,33 @@ export class Webnat {
   }
 
   onMethod(name: string, listener: (
-    params: any,
+    params: Param,
     signal: AbortSignal,
-    notify: (notification: any) => void,
+    notify: (notification: Param) => void,
     connection: Connection,
-  ) => Promise<any>): void {
+  ) => Promise<Param | void>): void {
     this.methodWebnat.on(name, listener);
   }
 
   offMethod(name: string, listener: (
-    params: any,
+    params: Param,
     signal: AbortSignal,
-    notify: (notification: any) => void,
+    notify: (notification: Param) => void,
     connection: Connection,
-  ) => Promise<any>): void {
+  ) => Promise<Param | void>): void {
     this.methodWebnat.off(name, listener);
   }
 
-  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<any> {
+  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param> {
     this.javaScriptAliveKeeper.increaseReference();
     try {
       if (connection) {
-        const result: any = await this.methodWebnat.method(func, options, connection);
+        const result: Param = await this.methodWebnat.method(func, options, connection);
         return result;
       }
       const call = new BroadcastMethodCall((): void => {
       });
-      const result: any = await call.start(Array.from(this.connections.values()), this.methodWebnat, func, options);
+      const result: Param = await call.start(Array.from(this.connections.values()), this.methodWebnat, func, options);
       return result;
     } finally {
       this.javaScriptAliveKeeper.decreaseReference();
@@ -215,7 +216,7 @@ export class Webnat {
   private postMessage(messageText: string): void {
     this.javaScriptAliveKeeper.delay();
     try {
-      const data: Record<string, any> = JSON.parse(messageText);
+      const data: Record<string, Param> = JSON.parse(messageText);
 
       const magic = data['magic'] as string;
       if (!magic || magic !== Message.MAGIC) {
@@ -231,12 +232,12 @@ export class Webnat {
         if (this.connections.has(from)) {
           return;
         }
-        const emptyAttrs: Record<string, any> = {};
+        const emptyAttrs: Record<string, Param> = {};
         const openMsg = message.open;
-        const paramForAttrs: any | undefined = openMsg.param;
-        let attributes: Record<string, any> = emptyAttrs;
-        if (paramForAttrs !== undefined) {
-          attributes = paramForAttrs as Record<string, any>;
+        const paramForAttrs: Param = openMsg.param;
+        let attributes: Record<string, Param> = emptyAttrs;
+        if (paramForAttrs !== undefined && paramForAttrs !== null && typeof paramForAttrs === 'object' && !Array.isArray(paramForAttrs)) {
+          attributes = paramForAttrs as Record<string, Param>;
         }
         const url = this.getWebContents()?.getURL();
         const connection = new ConnectionImpl(from, attributes, url, async (messageToSend: Message): Promise<void> => {
@@ -252,7 +253,7 @@ export class Webnat {
             throw WebnatError.serializationFailed(error);
           }
           this.javaScriptAliveKeeper.delay();
-          const js = `window.__web_webnat__.receive(...${string})`;
+          const js = `window.__web_webnat__.receive(...JSON.parse(${JSON.stringify(string)}))`;
           try {
             await webContents.executeJavaScript(js);
           } catch (error) {

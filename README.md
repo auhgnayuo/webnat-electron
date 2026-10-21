@@ -21,7 +21,7 @@ A lightweight WebContents-Native bridge library for Electron. Supports multiple 
 This package is private. Install it from the repository and pin a tag:
 
 ```bash
-npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#<tag>
+npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.0
 ```
 
 `electron` is an optional peer dependency (`>=22.0.0`); the main entry only uses its types.
@@ -36,6 +36,40 @@ Webnat requires a Web-side implementation and also supports other Native platfor
 | iOS / macOS (Swift) | [webnat-darwin](https://github.com/auhgnayuo/webnat-darwin) |
 | Android (Kotlin) | [webnat-android](https://github.com/auhgnayuo/webnat-android) |
 | HarmonyOS (ArkTS) | [webnat-ohos](https://github.com/auhgnayuo/webnat-ohos) |
+
+## 2.0.0 Data Contract and Migration
+
+Business parameters, results, and notifications accept only null, strings, booleans, finite numbers,
+plain string-keyed records, and arrays, recursively. The public `Param` type no longer includes nested
+undefined and supports readonly arrays. Missing top-level values become null; top-level null fields
+are omitted on the wire, while nested null keys / array positions are preserved.
+Handlers may return no result; the remote method resolves to null.
+
+NaN / Infinity, Date, Map, Set, class instances, functions, BigInt, cycles, nested undefined, array holes,
+symbol keys, accessors, and hidden record fields are rejected. There is no toJSON / toString fallback,
+field deletion, or implicit conversion to null / empty objects. Use plain records instead of Map,
+convert custom objects explicitly, and fill nullable array positions with null.
+
+```typescript
+import type { Param } from 'webnat';
+const param: Param = { nickname: null, items: [1, null, 3] };
+```
+
+Separate toJsonValue / fromJsonValue helpers validate and copy outgoing / incoming values.
+JavaScript number precision limits still apply; represent exact large integers as protocol strings.
+
+Business APIs use Param instead of any. Connection attributes accept plain objects only; scalar, array, or null
+connection parameters use an empty attributes object. Invalid method parameters reject with SERIALIZATION_FAILED(-1012),
+invalid handler results produce that error reply, and raw / broadcast remain best-effort via trySend without transmitting
+implicitly rewritten values. Invalid incoming messages are rejected as a whole.
+Scripts parse JSON text before receive, so __proto__ remains an ordinary data key rather than a JavaScript prototype setter.
+Error toJson() already returns a plain record and keeps its name.
+
+### Real Web SDK interop tests
+
+Build the adjacent webnat-web checkout using `npm run build`, then run `npm run test:interop` here. Override
+WEBNAT_WEB_SDK_BUNDLE to point to the Web SDK dist/index.js. Tests use real Electron / Chromium, preload, IPC, main frames,
+and iframes with an isolated temporary profile. npm test still includes standalone real Electron integration and type checks.
 
 ## Usage
 
@@ -168,3 +202,11 @@ Set `WEBNAT_SKIP_ELECTRON=1` to skip the Electron integration test on a machine 
 ## License
 
 This project is licensed under the MIT License.
+
+## Shared regression contracts
+
+See `contracts/README.md` for versioned golden fixtures and `contracts/CI.md` for test gates and runner setup.
+
+## Release
+
+Manual release instructions and migration notes: `RELEASING.md`. Upgrade the Web SDK and native bridge together to 2.0.0.

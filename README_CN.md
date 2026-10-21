@@ -21,7 +21,7 @@
 本包为私有包，从仓库安装并固定 tag：
 
 ```bash
-npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#<tag>
+npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.0
 ```
 
 `electron` 是可选的 peer 依赖（`>=22.0.0`）；主入口只使用它的类型。
@@ -36,6 +36,37 @@ Webnat 需要 Web 端实现配合，同时支持其他 Native 平台：
 | iOS / macOS (Swift) | [webnat-darwin](https://github.com/auhgnayuo/webnat-darwin) |
 | Android (Kotlin) | [webnat-android](https://github.com/auhgnayuo/webnat-android) |
 | HarmonyOS (ArkTS) | [webnat-ohos](https://github.com/auhgnayuo/webnat-ohos) |
+
+## 2.0.0 数据约定与迁移
+
+业务参数、方法结果及通知只支持 JSON 兼容数据：`null`、`string`、`boolean`、有限 `number`、
+普通字符串键对象和数组，可递归嵌套。公开的 `Param` 类型不再包含递归的 `undefined`，也支持只读数组。
+缺失的顶层参数 / 结果规范化为 `null`；顶层 null 在协议中省略字段，嵌套 null 保留对象键和数组位置。
+方法 handler 可以不返回结果，此时远程调用 resolve 为 null。
+
+拒绝 NaN / Infinity、Date、Map、Set、类实例、函数、BigInt、循环引用、嵌套 undefined、数组空洞、
+Symbol 键、访问器及对象隐藏字段。不调用 toJSON / toString 兜底，不删除字段或改写为 null / 空对象。
+JSON 对象请使用普通记录而不是 Map；自定义对象需要显式转换，数组中的空位置请显式填 null。
+
+```typescript
+import type { Param } from 'webnat';
+const param: Param = { nickname: null, items: [1, null, 3] };
+```
+
+发送 / 接收分别通过独立的 `toJsonValue` / `fromJsonValue` 工具进行验证与复制。
+JSON 数字仍遵循 JavaScript number 的精度限制，精确的大整数应在业务协议中使用字符串。
+
+公开业务 API 不再使用 any 参数，连接 attributes 只接受普通对象；null、数组或基本类型的连接参数使用空属性对象。
+非法 method 参数以 SERIALIZATION_FAILED(-1012) 失败，非法 handler 结果回复该错误；raw / broadcast 仍通过 trySend 静默失败，
+但不会发送被隐式改写的数据。非法接收数据拒绝整条消息。
+发送脚本先 JSON.parse 再 receive，确保 __proto__ 等合法数据键不被当成 JavaScript 原型设置。
+错误的 toJson() 已返回普通记录，不需要改名。
+
+### 真实 Web SDK 互通测试
+
+先在相邻的 webnat-web 仓库执行 `npm run build`，然后在本仓库执行 `npm run test:interop`。
+可用 WEBNAT_WEB_SDK_BUNDLE 指定 Web SDK 的 dist/index.js。测试使用真实 Electron / Chromium、preload、IPC 和主框架 / iframe，
+数据目录临时隔离，不需要手动注册 preload。npm test 仍包含独立于 Web SDK 的真实 Electron 集成测试和类型检查。
 
 ## 使用
 
@@ -168,3 +199,11 @@ npm test             # build + 单测 + 真实 Electron 22.0.2 集成测试
 ## 许可证
 
 本项目基于 MIT 许可证。
+
+## 共享回归契约
+
+五端自动消费同一份版本化报文 / 错误解析样例。说明见 `contracts/README.md`；测试门禁、SDK runner 和真机边界见 `contracts/CI.md`。
+
+## 发布
+
+本次统一为 2.0.0 / v2.0.0。请同步升级 Web SDK 与 Native 桥；手动发布命令与迁移说明见 `RELEASING.md`。

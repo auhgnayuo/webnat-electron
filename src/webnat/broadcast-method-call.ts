@@ -1,3 +1,4 @@
+import type { Param } from './json-value.js';
 import { WebnatError, WebnatErrorCode } from './error.js';
 import { Connection } from './connection.js';
 import { MethodFunc, MethodOptions, MethodWebnat } from './method-webnat.js';
@@ -11,9 +12,9 @@ export class BroadcastMethodCall {
   private controllers: Map<string, AbortController> = new Map();
   private timer: ReturnType<typeof setTimeout> | undefined = undefined;
   private methodName: string = '';
-  private userNotification: ((param: any) => void) | undefined = undefined;
-  private resolveFn: ((value: any) => void) | undefined = undefined;
-  private rejectFn: ((error: any) => void) | undefined = undefined;
+  private userNotification: ((param: Param) => void) | undefined = undefined;
+  private resolveFn: ((value: Param) => void) | undefined = undefined;
+  private rejectFn: ((error: unknown) => void) | undefined = undefined;
   private outerSignal: AbortSignal | undefined = undefined;
   private outerSignalAbort: (() => void) | undefined = undefined;
   private onFinished: () => void;
@@ -22,12 +23,12 @@ export class BroadcastMethodCall {
     this.onFinished = onFinished;
   }
 
-  start(connections: Connection[], methodWebnat: MethodWebnat, func: MethodFunc, options?: MethodOptions): Promise<any> {
+  start(connections: Connection[], methodWebnat: MethodWebnat, func: MethodFunc, options?: MethodOptions): Promise<Param> {
     this.methodName = func.method;
     this.userNotification = options?.onNotification;
     this.total = connections.length;
 
-    return new Promise<any>((resolve: (value: any) => void, reject: (error: any) => void): void => {
+    return new Promise<Param>((resolve: (value: Param) => void, reject: (error: unknown) => void): void => {
       this.resolveFn = resolve;
       this.rejectFn = reject;
 
@@ -64,7 +65,7 @@ export class BroadcastMethodCall {
         const connId = connection.id;
         const controller = new AbortController();
         this.controllers.set(connId, controller);
-        const perNotify = (p: any): void => {
+        const perNotify = (p: Param): void => {
           this.handleNotify(connId, p);
         };
         const subOptions: MethodOptions = {
@@ -72,10 +73,10 @@ export class BroadcastMethodCall {
           signal: controller.signal,
         };
         methodWebnat.method(func, subOptions, connection)
-          .then((result: any): void => {
+          .then((result: Param): void => {
             this.handleComplete(connId, result, null);
           })
-          .catch((err: any): void => {
+          .catch((err: unknown): void => {
             const w = WebnatError.from(err) ?? new WebnatError(WebnatErrorCode.UNKNOWN, 'Unknown Error');
             this.handleComplete(connId, undefined, w);
           });
@@ -83,7 +84,7 @@ export class BroadcastMethodCall {
     });
   }
 
-  private handleNotify(connId: string, param: any): void {
+  private handleNotify(connId: string, param: Param): void {
     if (this.settled) {
       return;
     }
@@ -100,7 +101,7 @@ export class BroadcastMethodCall {
     }
   }
 
-  private handleComplete(connId: string, result: any | undefined, error: WebnatError | null): void {
+  private handleComplete(connId: string, result: Param | undefined, error: WebnatError | null): void {
     if (this.settled) {
       return;
     }
@@ -150,7 +151,7 @@ export class BroadcastMethodCall {
     });
   }
 
-  private finish(result: any | undefined, error: WebnatError | null): void {
+  private finish(result: Param | undefined, error: WebnatError | null): void {
     if (this.settled) {
       return;
     }

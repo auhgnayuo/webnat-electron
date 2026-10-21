@@ -52,9 +52,9 @@ function createWebContents(session = createSession()) {
     isDestroyed() { return this.destroyed; },
     async executeJavaScript(script) {
       if (this.executeJavaScriptError) throw this.executeJavaScriptError;
-      const prefix = 'window.__web_webnat__.receive(...';
+      const prefix = 'window.__web_webnat__.receive(...JSON.parse(';
       assert.ok(script.startsWith(prefix));
-      executedMessages.push(...JSON.parse(script.slice(prefix.length, -1)));
+      executedMessages.push(...JSON.parse(JSON.parse(script.slice(prefix.length, -2))));
     },
   });
   return { webContents, ipc, session, executedMessages };
@@ -186,8 +186,8 @@ test('native to web: raw, broadcast and invoke leave as protocol dictionaries vi
   h.executedMessages.length = 0;
   h.webnat.broadcast('all');
   assert.deepEqual(h.executedMessages.map(m => [m.to, m.broadcast]), [
-    ['main', { name: 'all', param: null }],
-    ['frame-1', { name: 'all', param: null }],
+    ['main', { name: 'all' }],
+    ['frame-1', { name: 'all' }],
   ]);
 });
 
@@ -510,4 +510,65 @@ test('preload exposes nothing in a subframe: the bridge belongs to the top frame
   const { exposed, sent } = loadPreload({ isMainFrame: false });
   assert.deepEqual(Object.keys(exposed), []);
   assert.deepEqual(sent, []);
+});
+
+test('JSON contract rejects values that stringify would rewrite, before they reach the page', async () => {
+  const h = createElectronHarness(); const connection = connect(h, 'json');
+  const before = h.executedMessages.length;
+  for (const value of [NaN, Infinity, new Date(), new Map(), new Set(), {x: undefined}, [undefined]]) {
+    await assert.rejects(h.webnat.method({method: 'm', param: value}, {timeout: 100}, connection), e => e.code === WebnatErrorCode.SERIALIZATION_FAILED);
+    h.webnat.raw(value, connection); h.webnat.broadcast('e', value, connection);
+  }
+  await Promise.resolve(); assert.equal(h.executedMessages.length, before);
+  h.webnat.onRenderProcessGone();
+});
+
+test('JSON contract keeps connection attributes object-only and preserves nested nulls', () => {
+  const h = createElectronHarness();
+  for (const [i, value] of [null, 42, 'string', [1, 2]].entries()) {
+    const connection = connect(h, `attr-${i}`, value); assert.deepEqual(connection.attributes, {});
+  }
+  const payload = {null: null, list: [1, null, 3]};
+  const connection = connect(h, 'attr-object', payload); assert.deepEqual(connection.attributes, payload);
+  h.webnat.onRenderProcessGone();
+});
+
+test('JSON contract normalizes missing raw, broadcast and method parameters to null', async () => {
+  const h = createElectronHarness(); connect(h, 'json'); const raw = []; const broadcasts = []; const method = [];
+  h.webnat.onRaw(value => raw.push(value)); h.webnat.onBroadcast('event', value => broadcasts.push(value));
+  h.webnat.onMethod('void', async value => {method.push(value)});
+  h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, raw: {}});
+  h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, raw: {param: null}});
+  h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, broadcast: {name: 'event'}});
+  h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, invoke: {id: 'void-id', method: 'void'}});
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(raw, [null, null]); assert.deepEqual(broadcasts, [null]); assert.deepEqual(method, [null]);
+  const reply = h.executedMessages.find(m => m.reply?.id === 'void-id').reply;
+  assert.deepEqual(reply, {id: 'void-id'});
+  h.webnat.onRenderProcessGone();
+});
+
+test('JSON contract sends error replies for invalid method results without altering them', async () => {
+  const h = createElectronHarness(); connect(h, 'json');
+  for (const [i, value] of [NaN, new Date(), new Map(), [undefined]].entries()) {
+    h.webnat.onMethod(`bad-${i}`, async () => value);
+    h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, invoke: {id: `bad-${i}`, method: `bad-${i}`}});
+  }
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const replies = h.executedMessages.filter(m => m.reply).map(m => m.reply);
+  assert.equal(replies.length, 4);
+  for (const reply of replies) {assert.equal(reply.error.code, WebnatErrorCode.SERIALIZATION_FAILED); assert.equal(Object.hasOwn(reply, 'result'), false)}
+  h.webnat.onRenderProcessGone();
+});
+
+test('JSON contract keeps explicit null reply errors successful and rejects non-finite incoming data', async () => {
+  const h = createElectronHarness(); const connection = connect(h, 'json');
+  const promise = h.webnat.method({method: 'm'}, {timeout: 100}, connection);
+  const id = h.executedMessages.at(-1).invoke.id;
+  h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, reply: {id, result: 42, error: null}});
+  assert.equal(await promise, 42);
+  const values = []; h.webnat.onRaw(value => values.push(value));
+  h.ipc.emit(TO_MAIN, {}, '{"magic":"WEBNAT","from":"json","to":"native","raw":{"param":1e400}}');
+  assert.deepEqual(values, []);
+  h.webnat.onRenderProcessGone();
 });

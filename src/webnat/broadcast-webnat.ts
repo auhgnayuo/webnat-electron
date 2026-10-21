@@ -1,10 +1,11 @@
+import type { Param } from './json-value.js';
 import { Message } from './message.js';
 import { Connection, ConnectionImpl } from './connection.js';
 
 export class BroadcastWebnat {
-  private listeners: Map<string, ((param: any, connection: Connection) => void)[]> = new Map();
+  private listeners: Map<string, ((param: Param, connection: Connection) => void)[]> = new Map();
 
-  on = (name: string, listener: (param: any, connection: Connection) => void) => {
+  on = (name: string, listener: (param: Param, connection: Connection) => void) => {
     const listeners = this.listeners.get(name);
     if (!listeners) {
       this.listeners.set(name, [listener]);
@@ -17,7 +18,7 @@ export class BroadcastWebnat {
     }
   };
 
-  off = (name: string, listener: (param: any, connection: Connection) => void) => {
+  off = (name: string, listener: (param: Param, connection: Connection) => void) => {
     const listeners = this.listeners.get(name);
     if (listeners) {
       const filteredListeners = listeners.filter(item => item !== listener);
@@ -29,7 +30,7 @@ export class BroadcastWebnat {
     }
   };
 
-  broadcast = (name: string, params?: any, connection?: Connection): void => {
+  broadcast = (name: string, params?: Param, connection?: Connection): void => {
     if (connection) {
       const message = Message.broadcast(connection.id, name, params);
       (connection as ConnectionImpl).trySend(message);
@@ -41,7 +42,7 @@ export class BroadcastWebnat {
       return;
     }
     const name = message.broadcast.name;
-    const params: any = message.broadcast.param;
+    const params: Param = message.broadcast.param ?? null;
     if (!name || typeof name !== 'string') {
       return;
     }

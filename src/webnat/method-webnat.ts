@@ -1,3 +1,5 @@
+import { toJsonValue } from './json-value.js';
+import type { Param } from './json-value.js';
 import { randomUUID } from 'node:crypto';
 import { WebnatError, WebnatErrorCode } from './error.js';
 import { Message } from './message.js';
@@ -5,36 +7,36 @@ import { Connection, ConnectionImpl } from './connection.js';
 
 export interface MethodFunc {
   method: string;
-  param?: any;
+  param?: Param;
 }
 
 export interface MethodOptions {
   timeout?: number;
-  onNotification?: (param: any) => void;
+  onNotification?: (param: Param) => void;
   signal?: AbortSignal;
 }
 
 export class MethodWebnat {
-  private listeners: Map<string, (param: any, signal: AbortSignal, notify: (param: any) => void,
-    connection: Connection) => Promise<any>> = new Map();
-  private onNotifications: Map<string, (param: any) => void> = new Map();
-  private onCompletes: Map<string, (result?: any, error?: WebnatError | null) => void> = new Map();
+  private listeners: Map<string, (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+    connection: Connection) => Promise<Param | void>> = new Map();
+  private onNotifications: Map<string, (param: Param) => void> = new Map();
+  private onCompletes: Map<string, (result?: Param, error?: WebnatError | null) => void> = new Map();
   private onCloses: Map<string, Map<string, () => void>> = new Map();
   private aborts: Map<string, () => void> = new Map();
 
-  on(method: string, listener: (param: any, signal: AbortSignal, notify: (param: any) => void,
-    connection: Connection) => Promise<any>) {
+  on(method: string, listener: (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+    connection: Connection) => Promise<Param | void>) {
     this.listeners.set(method, listener);
   }
 
-  off(method: string, listener: (param: any, signal: AbortSignal, notify: (param: any) => void,
-    connection: Connection) => Promise<any>) {
+  off(method: string, listener: (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+    connection: Connection) => Promise<Param | void>) {
     if (listener === this.listeners.get(method)) {
       this.listeners.delete(method);
     }
   }
 
-  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<any> {
+  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param> {
     if (!connection) {
       throw WebnatError.closed();
     }
@@ -54,8 +56,8 @@ export class MethodWebnat {
     };
 
     try {
-      return await new Promise<any>((resolve, reject) => {
-        this.onCompletes.set(id, (result?: any, error?: WebnatError | null) => {
+      return await new Promise<Param>((resolve, reject) => {
+        this.onCompletes.set(id, (result?: Param, error?: WebnatError | null) => {
           if (error) {
             reject(error);
           } else {
@@ -125,7 +127,7 @@ export class MethodWebnat {
         };
 
         const invokeMessage = Message.invoke(connection.id, id, func.method, func.param);
-        void conn.send(invokeMessage).catch((err: any): void => {
+        void conn.send(invokeMessage).catch((err: unknown): void => {
           const onComplete = this.onCompletes.get(id);
           if (!onComplete) {
             return;
@@ -147,8 +149,8 @@ export class MethodWebnat {
     if (message.reply) {
       const reply = message.reply;
       const id = reply.id;
-      const result: any = reply.result;
-      const errorField: any = reply.error;
+      const result: Param = reply.result;
+      const errorField: Param = reply.error;
       const onComplete = this.onCompletes.get(id);
       if (onComplete) {
         if (errorField !== undefined && errorField !== null) {
@@ -169,7 +171,7 @@ export class MethodWebnat {
     if (message.notify) {
       const notify = message.notify;
       const id = notify.id;
-      const param: any = notify.param;
+      const param: Param = notify.param ?? null;
       const onNotification = this.onNotifications.get(id);
       if (onNotification) {
         onNotification(param);
@@ -180,7 +182,7 @@ export class MethodWebnat {
       const invoke = message.invoke;
       const id = invoke.id;
       const method = invoke.method;
-      const param: any = invoke.param;
+      const param: Param = invoke.param ?? null;
       if (!id || typeof id !== 'string') {
         return;
       }
@@ -205,10 +207,11 @@ export class MethodWebnat {
         }
       };
 
-      const complete = (result: any | undefined, error: WebnatError | null): void => {
+      const complete = (result: Param | void, error: WebnatError | null): void => {
         if (settled) {
           return;
         }
+        const jsonResult = error ? null : toJsonValue(result === undefined ? null : result);
         settled = true;
         clean();
         if (error) {
@@ -217,7 +220,7 @@ export class MethodWebnat {
           (connection as ConnectionImpl).trySend(replyMessage);
         } else {
           const conn = connection as ConnectionImpl;
-          conn.send(Message.reply(connection.id, id, result, undefined)).catch((err: any): void => {
+          conn.send(Message.reply(connection.id, id, jsonResult, undefined)).catch((err: unknown): void => {
             // A result that cannot be serialized is answered with the error, or the caller waits for its timeout.
             const w = WebnatError.from(err);
             if (w?.code === WebnatErrorCode.SERIALIZATION_FAILED) {
@@ -250,7 +253,7 @@ export class MethodWebnat {
         abortController.abort();
       });
 
-      const notify = (nParam: any): void => {
+      const notify = (nParam: Param): void => {
         if (settled) {
           return;
         }

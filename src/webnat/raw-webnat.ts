@@ -1,10 +1,11 @@
+import type { Param } from './json-value.js';
 import { Message } from './message.js';
 import { Connection, ConnectionImpl } from './connection.js';
 
 export class RawWebnat {
-  private listeners: ((param: any, connection: Connection) => void)[] = [];
+  private listeners: ((param: Param, connection: Connection) => void)[] = [];
 
-  on = (listener: (param: any, connection: Connection) => void) => {
+  on = (listener: (param: Param, connection: Connection) => void) => {
     const index = this.listeners.indexOf(listener);
     if (index !== -1) {
       this.listeners.splice(index, 1);
@@ -12,11 +13,11 @@ export class RawWebnat {
     this.listeners.push(listener);
   };
 
-  off = (listener: (param: any, connection: Connection) => void) => {
+  off = (listener: (param: Param, connection: Connection) => void) => {
     this.listeners = this.listeners.filter(item => item !== listener);
   };
 
-  raw = (param: any, connection: Connection): void => {
+  raw = (param: Param, connection: Connection): void => {
     const message = Message.raw(connection.id, param);
     (connection as ConnectionImpl).trySend(message);
   };
@@ -25,7 +26,7 @@ export class RawWebnat {
     if (!message.raw) {
       return;
     }
-    const param: any = message.raw.param;
+    const param: Param = message.raw.param ?? null;
     const snapshot = this.listeners.slice();
     snapshot.forEach(listener => {
       try {

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-21
+
+This is a coordinated **major / breaking release** across Web, Electron, Darwin, Android and OHOS. Upgrade both sides of the bridge together; migration and manual publishing instructions are in `RELEASING.md`. Contract fixtures v1 are frozen for this release.
+
+### Shared contract / regression gates
+
+- Added versioned golden message, rejection and error fixtures shared by all five implementations, digest verification and a cross-repository drift/interop gate.
+- Unified error aliases, code 0, signed 32-bit / whole-string parsing and empty/null message behavior. Web errors now inherit Error.
+- PR test workflows now execute tests rather than build-only checks. OHOS SDK execution requires an approved isolated self-hosted runner; device tests remain distinct from local tests.
+
+### Changed (Breaking)
+
+- Public Param data uses only JSON-compatible null, strings, booleans, finite numbers, plain records, and arrays. Nested undefined, holes, class instances, Date / Map / Set / BigInt, functions, cycles, symbol keys, accessors, and hidden fields are rejected rather than rewritten. Missing top-level values normalize to null; null fields are omitted only at the top level.
+- Extracted standalone toJsonValue / fromJsonValue helpers. Canonical Message dictionaries recursively validate business payloads, and incoming invalid data rejects the whole message.
+
+### Tests
+
+- Added runtime JSON contract matrices, compile-time positive / negative public API checks, and transport / RPC regressions. Added a real Electron + built Web SDK interop suite covering both main frames and iframes.
+
+### Fixed
+
+- Connection attributes now accept objects only. Raw / broadcast / method input callbacks normalize missing values to null.
+- Renderer scripts use JSON.parse on quoted JSON text rather than evaluating object literals, preserving __proto__ data keys without prototype mutation.
+
 ## [1.4.0] - 2026-10-13
 
 ### Added

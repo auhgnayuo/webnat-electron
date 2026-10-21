@@ -1,6 +1,6 @@
 {
   "name": "webnat",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "A lightweight WebContents-Native bridge library for Electron, supporting raw messages, broadcast, and RPC.",
   "author": "Auhgnayuo",
   "license": "MIT",
@@ -31,7 +31,10 @@
   },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "contracts",
+    "RELEASING.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -39,7 +42,10 @@
     "build": "npm run clean && tsup",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run contracts:check && npm run build && npm run typecheck:tests && node --test test/*.test.mjs",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
+    "test:interop": "npm run build && node --test test/interop/*.test.mjs",
+    "contracts:check": "python3 contracts/verify.py"
   },
   "devDependencies": {
     "@types/node": "^18.19.0",
@@ -54,5 +60,6 @@
     "electron": {
       "optional": true
     }
-  }
+  },
+  "private": true
 }
