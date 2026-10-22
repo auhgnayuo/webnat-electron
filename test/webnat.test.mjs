@@ -515,7 +515,7 @@ test('preload exposes nothing in a subframe: the bridge belongs to the top frame
 test('JSON contract rejects values that stringify would rewrite, before they reach the page', async () => {
   const h = createElectronHarness(); const connection = connect(h, 'json');
   const before = h.executedMessages.length;
-  for (const value of [NaN, Infinity, new Date(), new Map(), new Set(), {x: undefined}, [undefined]]) {
+  for (const value of [NaN, Infinity, new Date(), new Map(), new Set(), {x: new Date()}, [new Date()]]) {
     await assert.rejects(h.webnat.method({method: 'm', param: value}, {timeout: 100}, connection), e => e.code === WebnatErrorCode.SERIALIZATION_FAILED);
     h.webnat.raw(value, connection); h.webnat.broadcast('e', value, connection);
   }
@@ -533,7 +533,7 @@ test('JSON contract keeps connection attributes object-only and preserves nested
   h.webnat.onRenderProcessGone();
 });
 
-test('JSON contract normalizes missing raw, broadcast and method parameters to null', async () => {
+test('JSON contract keeps missing raw, broadcast and method parameters absent', async () => {
   const h = createElectronHarness(); connect(h, 'json'); const raw = []; const broadcasts = []; const method = [];
   h.webnat.onRaw(value => raw.push(value)); h.webnat.onBroadcast('event', value => broadcasts.push(value));
   h.webnat.onMethod('void', async value => {method.push(value)});
@@ -542,7 +542,7 @@ test('JSON contract normalizes missing raw, broadcast and method parameters to n
   h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, broadcast: {name: 'event'}});
   h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, invoke: {id: 'void-id', method: 'void'}});
   await new Promise(resolve => setTimeout(resolve, 0));
-  assert.deepEqual(raw, [null, null]); assert.deepEqual(broadcasts, [null]); assert.deepEqual(method, [null]);
+  assert.deepEqual(raw, [undefined, null]); assert.deepEqual(broadcasts, [undefined]); assert.deepEqual(method, [undefined]);
   const reply = h.executedMessages.find(m => m.reply?.id === 'void-id').reply;
   assert.deepEqual(reply, {id: 'void-id'});
   h.webnat.onRenderProcessGone();
@@ -550,7 +550,7 @@ test('JSON contract normalizes missing raw, broadcast and method parameters to n
 
 test('JSON contract sends error replies for invalid method results without altering them', async () => {
   const h = createElectronHarness(); connect(h, 'json');
-  for (const [i, value] of [NaN, new Date(), new Map(), [undefined]].entries()) {
+  for (const [i, value] of [NaN, new Date(), new Map(), [new Date()]].entries()) {
     h.webnat.onMethod(`bad-${i}`, async () => value);
     h.sendFromRenderer({magic: Message.MAGIC, from: 'json', to: NATIVE, invoke: {id: `bad-${i}`, method: `bad-${i}`}});
   }

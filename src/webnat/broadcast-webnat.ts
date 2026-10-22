@@ -3,9 +3,9 @@ import { Message } from './message.js';
 import { Connection, ConnectionImpl } from './connection.js';
 
 export class BroadcastWebnat {
-  private listeners: Map<string, ((param: Param, connection: Connection) => void)[]> = new Map();
+  private listeners: Map<string, ((param: Param | undefined, connection: Connection) => void)[]> = new Map();
 
-  on = (name: string, listener: (param: Param, connection: Connection) => void) => {
+  on = (name: string, listener: (param: Param | undefined, connection: Connection) => void) => {
     const listeners = this.listeners.get(name);
     if (!listeners) {
       this.listeners.set(name, [listener]);
@@ -18,7 +18,7 @@ export class BroadcastWebnat {
     }
   };
 
-  off = (name: string, listener: (param: Param, connection: Connection) => void) => {
+  off = (name: string, listener: (param: Param | undefined, connection: Connection) => void) => {
     const listeners = this.listeners.get(name);
     if (listeners) {
       const filteredListeners = listeners.filter(item => item !== listener);
@@ -42,7 +42,7 @@ export class BroadcastWebnat {
       return;
     }
     const name = message.broadcast.name;
-    const params: Param = message.broadcast.param ?? null;
+    const params = message.broadcast.param;
     if (!name || typeof name !== 'string') {
       return;
     }

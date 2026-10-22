@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-22
+
+- Preserve JSON null distinctly from absence. Omit object properties whose value is undefined; normalize undefined / holes in arrays to null; omit top-level undefined fields while preserving explicit null. Resolve no-result RPC handlers to undefined. Introduce shared contract v2; leave released contract v1 unchanged.
+
+
 ## [2.0.0] - 2026-10-21
 
 This is a coordinated **major / breaking release** across Web, Electron, Darwin, Android and OHOS. Upgrade both sides of the bridge together; migration and manual publishing instructions are in `RELEASING.md`. Contract fixtures v1 are frozen for this release.

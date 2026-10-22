@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {Message} from '../dist/webnat/message.js';
 import {WebnatError} from '../dist/webnat/error.js';
 import {toJsonValue, fromJsonValue} from '../dist/webnat/json-value.js';
-const fixtures=JSON.parse(fs.readFileSync(new URL('../contracts/v1/golden.json',import.meta.url),'utf8'));
+const fixtures=JSON.parse(fs.readFileSync(new URL('../contracts/v2/golden.json',import.meta.url),'utf8'));
 for(const c of fixtures.errors) it(`contract/${c.id}`,()=>{
  const e=WebnatError.from(c.input);
  assert.deepEqual(e && {code:e.code,message:e.message},c.expected);

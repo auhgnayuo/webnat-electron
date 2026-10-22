@@ -16,7 +16,8 @@ describe('strict JSON business data contract', () => {
   });
   it('supports scalars and distinguishes numbers from booleans', () => {
     for (const value of [null, '', 0, 1, -1, 1.5, true, false, [0, 1, true, false, null]]) assert.deepEqual(decoded(encoded(value)), value);
-    assert.equal(decoded(undefined), null);
+    assert.equal(decoded(undefined), undefined);
+    assert.equal(encoded(undefined), undefined);
   });
   it('rejects non-finite numbers at every depth in both directions', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
@@ -29,9 +30,14 @@ describe('strict JSON business data contract', () => {
       for (const nested of [value, [value], {x: value}]) { rejects(nested); rejects(nested, true); }
     }
   });
-  it('rejects nested undefined and array holes instead of dropping fields or replacing positions', () => {
-    rejects(undefined);
-    for (const value of [[undefined], {x: undefined}, new Array(2)]) { rejects(value); rejects(value, true); }
+  it('omits undefined object properties and normalizes array undefined / holes to null', () => {
+    const input = {drop: undefined, keep: null, nested: {drop: undefined, list: [undefined, null, {drop: undefined, keep: 1}]}};
+    const expected = {keep: null, nested: {list: [null, null, {keep: 1}]}};
+    assert.deepEqual(encoded(input), expected);
+    assert.deepEqual(decoded(input), expected);
+    assert.deepEqual(encoded(new Array(2)), [null, null]);
+    assert.equal(decoded(undefined), undefined);
+    assert.equal(encoded(undefined), undefined);
   });
   it('rejects cycles and permits shared children', () => {
     const object = {}; object.self = object;
@@ -62,7 +68,7 @@ describe('strict JSON business data contract', () => {
     const value2 = Object.create(null); value2.x = null;
     assert.deepEqual(encoded(value2), {x: null});
   });
-  it('round-trips every message payload through dictionaries and normalizes top-level nulls', () => {
+  it('round-trips message payloads and distinguishes missing from explicit null', () => {
     const value = {null: null, list: [1, null, 3]};
     for (const message of [Message.open('p', value), Message.close('p', value), Message.raw('p', value), Message.broadcast('p', 'e', value),
       Message.invoke('p', 'i', 'm', value), Message.reply('p', 'i', value), Message.reply('p', 'i', undefined, value), Message.notify('p', 'i', value), Message.abort('p', 'i')]) {
@@ -75,13 +81,14 @@ describe('strict JSON business data contract', () => {
         if (explicit) Object.assign(fields, {param: null, result: null, error: null});
         const parsed = Message.from({magic: Message.MAGIC, from: 'p', to: 'n', [body]: fields}); assert.ok(parsed);
         for (const field of body === 'reply' ? ['result', 'error'] : ['param']) {
-          assert.equal(parsed[body][field], null); assert.equal(Object.hasOwn(parsed.toDictionary()[body], field), false);
+          assert.equal(parsed[body][field], explicit ? null : undefined);
+          assert.equal(Object.hasOwn(parsed.toDictionary()[body], field), explicit);
         }
       }
     }
   });
   it('rejects invalid values in every encoded and decoded payload field', () => {
-    for (const value of [new Date(), NaN, {nested: [undefined]}]) {
+    for (const value of [new Date(), NaN, {nested: [new Date()]}]) {
       for (const message of [Message.open('p', value), Message.close('p', value), Message.raw('p', value), Message.broadcast('p', 'e', value),
         Message.invoke('p', 'i', 'm', value), Message.reply('p', 'i', value), Message.reply('p', 'i', undefined, value), Message.notify('p', 'i', value)]) {
         assert.throws(() => message.toDictionary(), e => e.code === WebnatErrorCode.SERIALIZATION_FAILED);

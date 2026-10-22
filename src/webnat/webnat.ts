@@ -95,7 +95,7 @@ export class Webnat {
       if (!connection) {
         return;
       }
-      this.rawWebnat.raw(null, connection);
+      this.rawWebnat.raw(undefined, connection);
     });
   }
 
@@ -116,65 +116,65 @@ export class Webnat {
     closing.forEach((connection) => this.onConnectionClose(connection));
   }
 
-  onRaw(listener: (raw: Param, connection: Connection) => void): void {
+  onRaw(listener: (raw: Param | undefined, connection: Connection) => void): void {
     this.rawWebnat.on(listener);
   }
 
-  offRaw(listener: (raw: Param, connection: Connection) => void): void {
+  offRaw(listener: (raw: Param | undefined, connection: Connection) => void): void {
     this.rawWebnat.off(listener);
   }
 
-  raw(raw: Param, connection: Connection): void {
+  raw(raw: Param | undefined, connection: Connection): void {
     this.rawWebnat.raw(raw, connection);
   }
 
-  onBroadcast(name: string, listener: (params: Param, connection: Connection) => void): void {
+  onBroadcast(name: string, listener: (params: Param | undefined, connection: Connection) => void): void {
     this.broadcastWebnat.on(name, listener);
   }
 
-  offBroadcast(name: string, listener: (params: Param, connection: Connection) => void): void {
+  offBroadcast(name: string, listener: (params: Param | undefined, connection: Connection) => void): void {
     this.broadcastWebnat.off(name, listener);
   }
 
   broadcast(name: string, params?: Param, connection?: Connection): void {
     if (connection) {
-      this.broadcastWebnat.broadcast(name, params ?? null, connection);
+      this.broadcastWebnat.broadcast(name, params, connection);
       return;
     }
     const snapshot = Array.from(this.connections.values());
     snapshot.forEach((c) => {
-      this.broadcastWebnat.broadcast(name, params ?? null, c);
+      this.broadcastWebnat.broadcast(name, params, c);
     });
   }
 
   onMethod(name: string, listener: (
-    params: Param,
+    params: Param | undefined,
     signal: AbortSignal,
-    notify: (notification: Param) => void,
+    notify: (notification: Param | undefined) => void,
     connection: Connection,
   ) => Promise<Param | void>): void {
     this.methodWebnat.on(name, listener);
   }
 
   offMethod(name: string, listener: (
-    params: Param,
+    params: Param | undefined,
     signal: AbortSignal,
-    notify: (notification: Param) => void,
+    notify: (notification: Param | undefined) => void,
     connection: Connection,
   ) => Promise<Param | void>): void {
     this.methodWebnat.off(name, listener);
   }
 
-  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param> {
+  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param | undefined> {
     this.javaScriptAliveKeeper.increaseReference();
     try {
       if (connection) {
-        const result: Param = await this.methodWebnat.method(func, options, connection);
+        const result: Param | undefined = await this.methodWebnat.method(func, options, connection);
         return result;
       }
       const call = new BroadcastMethodCall((): void => {
       });
-      const result: Param = await call.start(Array.from(this.connections.values()), this.methodWebnat, func, options);
+      const result: Param | undefined = await call.start(Array.from(this.connections.values()), this.methodWebnat, func, options);
       return result;
     } finally {
       this.javaScriptAliveKeeper.decreaseReference();
@@ -234,7 +234,7 @@ export class Webnat {
         }
         const emptyAttrs: Record<string, Param> = {};
         const openMsg = message.open;
-        const paramForAttrs: Param = openMsg.param;
+        const paramForAttrs: Param | undefined = openMsg.param;
         let attributes: Record<string, Param> = emptyAttrs;
         if (paramForAttrs !== undefined && paramForAttrs !== null && typeof paramForAttrs === 'object' && !Array.isArray(paramForAttrs)) {
           attributes = paramForAttrs as Record<string, Param>;

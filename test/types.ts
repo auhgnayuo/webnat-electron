@@ -4,10 +4,8 @@ function typeWitness(api: Webnat, connection: Connection) {
   const value: Param = { list: [1, null, 'x'] as const, null: null };
   api.raw(value, connection);
   api.onMethod('no-result', async () => {});
-  // @ts-expect-error nested undefined is not JSON data
-  api.raw({ x: undefined }, connection);
-  // @ts-expect-error undefined positions are not JSON data
-  api.raw([undefined], connection);
+  api.raw({ x: undefined, nested: { y: undefined } }, connection);
+  api.raw([undefined, null], connection);
   // @ts-expect-error Date is not a JSON record
   api.raw(new Date(), connection);
   // @ts-expect-error Map is not a JSON object

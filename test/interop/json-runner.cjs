@@ -57,7 +57,7 @@ setTimeout(() => {out('watchdog', false, 'interop runner exceeded 60s'); app.exi
       const before = calls;
       for (const frame of frames) {
         const codes = await frame.executeJavaScript(`(async () => {
-          const values = [NaN,Infinity,new Date(),new Map(),new Set(),10n,{x:undefined},[undefined]];
+          const values = [NaN,Infinity,new Date(),new Map(),new Set(),10n,{x:new Date()},[new Date()]];
           const codes = []; for (const param of values) {
             try {await sdk.method({method:'node.echo',param},{timeout:500}); codes.push('unexpected success')}
             catch(error) {codes.push(error.code)}
@@ -67,18 +67,18 @@ setTimeout(() => {out('watchdog', false, 'interop runner exceeded 60s'); app.exi
       }
       assert.equal(calls, before);
     });
-    await check('native requests receive JSON results, notifications and null empty results from both frames', async () => {
+    await check('native requests receive JSON results, notifications and absent results from both frames', async () => {
       for (const connection of native.getConnections().values()) {
         const notes = [];
         assert.deepEqual(await native.method({method: 'web.echo', param: payload}, {timeout: 1000, onNotification: value => notes.push(value)}, connection), payload);
         assert.deepEqual(notes, [payload]);
-        assert.equal(await native.method({method: 'web.empty'}, {timeout: 1000}, connection), null);
+        assert.equal(await native.method({method: 'web.empty'}, {timeout: 1000}, connection), undefined);
         await assert.rejects(native.method({method: 'web.bad'}, {timeout: 1000}, connection), error => error.code === -1012);
       }
     });
     await check('native invalid parameters fail before renderer execution rather than being rewritten', async () => {
       for (const connection of native.getConnections().values()) {
-        for (const param of [NaN, new Date(), new Map(), [undefined]]) {
+        for (const param of [NaN, new Date(), new Map(), [new Date()]]) {
           await assert.rejects(native.method({method: 'web.echo', param}, {timeout: 1000}, connection), error => error.code === -1012);
         }
       }

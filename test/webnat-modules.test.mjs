@@ -30,7 +30,7 @@ test('Message.from rejects a wrong magic and an empty from', () => {
 test('Message.from keeps an open without param', () => {
   const parsed = Message.from({ magic: Message.MAGIC, from: 'conn-b', to: NATIVE, open: {} });
   assert.notEqual(parsed?.open, undefined);
-  assert.equal(parsed?.open?.param, null);
+  assert.equal(parsed?.open?.param, undefined);
 });
 
 test('Message.from drops bodies that lack their required fields (truthiness rule)', () => {
@@ -44,7 +44,7 @@ test('Message.from drops bodies that lack their required fields (truthiness rule
   const reply = Message.from({ ...base, reply: { id: 'i', result: 0 } })?.reply;
   assert.equal(reply?.id, 'i');
   assert.equal(reply?.result, 0);
-  assert.equal(reply?.error, null);
+  assert.equal(reply?.error, undefined);
 });
 
 test('Message.toDictionary omits absent fields', () => {
@@ -136,7 +136,7 @@ test('MethodWebnat.receive answers a registered invoke with its result', async (
   assert.equal(out.length, 1);
   assert.equal(out[0].reply?.id, 'rid-2');
   assert.deepEqual(out[0].reply?.result, { v: 1 });
-  assert.equal(out[0].reply?.error, null);
+  assert.equal(out[0].reply?.error, undefined);
 });
 
 test('MethodWebnat.receive answers a handler that throws synchronously with an error reply, and takes a plain return value as the result', async () => {
@@ -148,8 +148,8 @@ test('MethodWebnat.receive answers a handler that throws synchronously with an e
   await mw.receive(new Message('conn-1', NATIVE, undefined, undefined, undefined, undefined, new Invoke('rid-3', 'throws')), connection);
   await mw.receive(new Message('conn-1', NATIVE, undefined, undefined, undefined, undefined, new Invoke('rid-4', 'plain-return')), connection);
   assert.deepEqual(out.map(m => [m.reply?.id, m.reply?.result, m.reply?.error]), [
-    ['rid-3', null, { code: 123, message: 'boom' }],
-    ['rid-4', { v: 2 }, null],
+    ['rid-3', undefined, { code: 123, message: 'boom' }],
+    ['rid-4', { v: 2 }, undefined],
   ]);
 });
 
@@ -167,7 +167,7 @@ test('MethodWebnat.receive answers an unserializable result with a SERIALIZATION
   await sleep(5);
   assert.equal(out.length, 1);
   assert.equal(out[0].reply?.id, 'rid-5');
-  assert.equal(out[0].reply?.result, null);
+  assert.equal(out[0].reply?.result, undefined);
   assert.equal(WebnatError.from(out[0].reply?.error)?.code, WebnatErrorCode.SERIALIZATION_FAILED);
 
   const sent = [];

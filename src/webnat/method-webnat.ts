@@ -12,31 +12,31 @@ export interface MethodFunc {
 
 export interface MethodOptions {
   timeout?: number;
-  onNotification?: (param: Param) => void;
+  onNotification?: (param: Param | undefined) => void;
   signal?: AbortSignal;
 }
 
 export class MethodWebnat {
-  private listeners: Map<string, (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+  private listeners: Map<string, (param: Param | undefined, signal: AbortSignal, notify: (param: Param | undefined) => void,
     connection: Connection) => Promise<Param | void>> = new Map();
-  private onNotifications: Map<string, (param: Param) => void> = new Map();
+  private onNotifications: Map<string, (param: Param | undefined) => void> = new Map();
   private onCompletes: Map<string, (result?: Param, error?: WebnatError | null) => void> = new Map();
   private onCloses: Map<string, Map<string, () => void>> = new Map();
   private aborts: Map<string, () => void> = new Map();
 
-  on(method: string, listener: (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+  on(method: string, listener: (param: Param | undefined, signal: AbortSignal, notify: (param: Param | undefined) => void,
     connection: Connection) => Promise<Param | void>) {
     this.listeners.set(method, listener);
   }
 
-  off(method: string, listener: (param: Param, signal: AbortSignal, notify: (param: Param) => void,
+  off(method: string, listener: (param: Param | undefined, signal: AbortSignal, notify: (param: Param | undefined) => void,
     connection: Connection) => Promise<Param | void>) {
     if (listener === this.listeners.get(method)) {
       this.listeners.delete(method);
     }
   }
 
-  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param> {
+  async method(func: MethodFunc, options?: MethodOptions, connection?: Connection): Promise<Param | undefined> {
     if (!connection) {
       throw WebnatError.closed();
     }
@@ -56,12 +56,12 @@ export class MethodWebnat {
     };
 
     try {
-      return await new Promise<Param>((resolve, reject) => {
+      return await new Promise<Param | undefined>((resolve, reject) => {
         this.onCompletes.set(id, (result?: Param, error?: WebnatError | null) => {
           if (error) {
             reject(error);
           } else {
-            resolve(result ?? null);
+            resolve(result);
           }
         });
 
@@ -149,8 +149,8 @@ export class MethodWebnat {
     if (message.reply) {
       const reply = message.reply;
       const id = reply.id;
-      const result: Param = reply.result;
-      const errorField: Param = reply.error;
+      const result: Param | undefined = reply.result;
+      const errorField: Param | undefined = reply.error;
       const onComplete = this.onCompletes.get(id);
       if (onComplete) {
         if (errorField !== undefined && errorField !== null) {
@@ -171,7 +171,7 @@ export class MethodWebnat {
     if (message.notify) {
       const notify = message.notify;
       const id = notify.id;
-      const param: Param = notify.param ?? null;
+      const param = notify.param;
       const onNotification = this.onNotifications.get(id);
       if (onNotification) {
         onNotification(param);
@@ -182,7 +182,7 @@ export class MethodWebnat {
       const invoke = message.invoke;
       const id = invoke.id;
       const method = invoke.method;
-      const param: Param = invoke.param ?? null;
+      const param = invoke.param;
       if (!id || typeof id !== 'string') {
         return;
       }
@@ -211,7 +211,7 @@ export class MethodWebnat {
         if (settled) {
           return;
         }
-        const jsonResult = error ? null : toJsonValue(result === undefined ? null : result);
+        const jsonResult = error ? null : toJsonValue(result);
         settled = true;
         clean();
         if (error) {
@@ -253,7 +253,7 @@ export class MethodWebnat {
         abortController.abort();
       });
 
-      const notify = (nParam: Param): void => {
+      const notify = (nParam: Param | undefined): void => {
         if (settled) {
           return;
         }

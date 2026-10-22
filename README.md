@@ -21,7 +21,7 @@ A lightweight WebContents-Native bridge library for Electron. Supports multiple 
 This package is private. Install it from the repository and pin a tag:
 
 ```bash
-npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.0
+npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.1
 ```
 
 `electron` is an optional peer dependency (`>=22.0.0`); the main entry only uses its types.
@@ -37,17 +37,16 @@ Webnat requires a Web-side implementation and also supports other Native platfor
 | Android (Kotlin) | [webnat-android](https://github.com/auhgnayuo/webnat-android) |
 | HarmonyOS (ArkTS) | [webnat-ohos](https://github.com/auhgnayuo/webnat-ohos) |
 
-## 2.0.0 Data Contract and Migration
+## 2.0.1 Data Contract and Migration
+
+This 2.0.1 release distinguishes missing values from explicit JSON null. The previously published 2.0.0 contract v1 remains immutable.
 
 Business parameters, results, and notifications accept only null, strings, booleans, finite numbers,
-plain string-keyed records, and arrays, recursively. The public `Param` type no longer includes nested
-undefined and supports readonly arrays. Missing top-level values become null; top-level null fields
-are omitted on the wire, while nested null keys / array positions are preserved.
-Handlers may return no result; the remote method resolves to null.
+plain string-keyed records, and arrays, recursively. The public `Param` type supports readonly arrays and accepts undefined only inside containers. Top-level undefined omits the field while explicit null is preserved; nested object undefined keys are omitted and array undefined / holes become null.
+Handlers may return no result; the remote method resolves to undefined.
 
-NaN / Infinity, Date, Map, Set, class instances, functions, BigInt, cycles, nested undefined, array holes,
-symbol keys, accessors, and hidden record fields are rejected. There is no toJSON / toString fallback,
-field deletion, or implicit conversion to null / empty objects. Use plain records instead of Map,
+NaN / Infinity, Date, Map, Set, class instances, functions, BigInt, cycles,
+symbol keys, accessors, and hidden record fields are rejected. There is no toJSON / toString fallback or implicit conversion to null / empty objects. Use plain records instead of Map,
 convert custom objects explicitly, and fill nullable array positions with null.
 
 ```typescript
@@ -209,4 +208,4 @@ See `contracts/README.md` for versioned golden fixtures and `contracts/CI.md` fo
 
 ## Release
 
-Manual release instructions and migration notes: `RELEASING.md`. Upgrade the Web SDK and native bridge together to 2.0.0.
+Manual release instructions and migration notes: `RELEASING.md`. Upgrade the Web SDK and native bridge together to 2.0.1.

@@ -12,8 +12,8 @@ export class BroadcastMethodCall {
   private controllers: Map<string, AbortController> = new Map();
   private timer: ReturnType<typeof setTimeout> | undefined = undefined;
   private methodName: string = '';
-  private userNotification: ((param: Param) => void) | undefined = undefined;
-  private resolveFn: ((value: Param) => void) | undefined = undefined;
+  private userNotification: ((param: Param | undefined) => void) | undefined = undefined;
+  private resolveFn: ((value: Param | undefined) => void) | undefined = undefined;
   private rejectFn: ((error: unknown) => void) | undefined = undefined;
   private outerSignal: AbortSignal | undefined = undefined;
   private outerSignalAbort: (() => void) | undefined = undefined;
@@ -23,12 +23,12 @@ export class BroadcastMethodCall {
     this.onFinished = onFinished;
   }
 
-  start(connections: Connection[], methodWebnat: MethodWebnat, func: MethodFunc, options?: MethodOptions): Promise<Param> {
+  start(connections: Connection[], methodWebnat: MethodWebnat, func: MethodFunc, options?: MethodOptions): Promise<Param | undefined> {
     this.methodName = func.method;
     this.userNotification = options?.onNotification;
     this.total = connections.length;
 
-    return new Promise<Param>((resolve: (value: Param) => void, reject: (error: unknown) => void): void => {
+    return new Promise<Param | undefined>((resolve: (value: Param | undefined) => void, reject: (error: unknown) => void): void => {
       this.resolveFn = resolve;
       this.rejectFn = reject;
 
@@ -65,7 +65,7 @@ export class BroadcastMethodCall {
         const connId = connection.id;
         const controller = new AbortController();
         this.controllers.set(connId, controller);
-        const perNotify = (p: Param): void => {
+        const perNotify = (p: Param | undefined): void => {
           this.handleNotify(connId, p);
         };
         const subOptions: MethodOptions = {
@@ -73,7 +73,7 @@ export class BroadcastMethodCall {
           signal: controller.signal,
         };
         methodWebnat.method(func, subOptions, connection)
-          .then((result: Param): void => {
+          .then((result: Param | undefined): void => {
             this.handleComplete(connId, result, null);
           })
           .catch((err: unknown): void => {
@@ -84,7 +84,7 @@ export class BroadcastMethodCall {
     });
   }
 
-  private handleNotify(connId: string, param: Param): void {
+  private handleNotify(connId: string, param: Param | undefined): void {
     if (this.settled) {
       return;
     }
@@ -175,7 +175,7 @@ export class BroadcastMethodCall {
     if (error) {
       this.rejectFn?.(error);
     } else {
-      this.resolveFn?.(result ?? null);
+      this.resolveFn?.(result);
     }
     this.onFinished();
   }

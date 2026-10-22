@@ -3,31 +3,31 @@ import { fromJsonValue, toJsonValue, type Param } from './json-value.js';
 export type { Param } from './json-value.js';
 
 export class Open {
-  constructor(readonly param: Param = null) {}
+  constructor(readonly param?: Param) {}
 }
 
 export class Close {
-  constructor(readonly param: Param = null) {}
+  constructor(readonly param?: Param) {}
 }
 
 export class Raw {
-  constructor(readonly param: Param = null) {}
+  constructor(readonly param?: Param) {}
 }
 
 export class Broadcast {
-  constructor(readonly name: string, readonly param: Param = null) {}
+  constructor(readonly name: string, readonly param?: Param) {}
 }
 
 export class Invoke {
-  constructor(readonly id: string, readonly method: string, readonly param: Param = null) {}
+  constructor(readonly id: string, readonly method: string, readonly param?: Param) {}
 }
 
 export class Reply {
-  constructor(readonly id: string, readonly result: Param = null, readonly error: Param = null) {}
+  constructor(readonly id: string, readonly result?: Param, readonly error?: Param) {}
 }
 
 export class Notify {
-  constructor(readonly id: string, readonly param: Param = null) {}
+  constructor(readonly id: string, readonly param?: Param) {}
 }
 
 export class Abort {
@@ -85,7 +85,7 @@ export class Message {
     return new Message(Message.NATIVE_UUID, to, undefined, undefined, undefined, undefined, undefined, undefined, undefined, new Abort(id));
   }
 
-  /** 生成规范的协议字典：顶层空值省略；业务值严格校验，非法值抛出 SERIALIZATION_FAILED。 */
+  /** 生成规范的协议字典：顶层 undefined 省略、null 保留；业务值严格校验，非法值抛出 SERIALIZATION_FAILED。 */
   toDictionary(): Record<string, Param> {
     try {
       if (this.magic !== Message.MAGIC || typeof this.from !== 'string' || typeof this.to !== 'string') throw new Error('Invalid message header');
@@ -94,21 +94,21 @@ export class Message {
         const body = protocolRecord(this.open, Open);
         const target: Record<string, Param> = {};
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["open"] = target;
       }
       if (this.close !== undefined) {
         const body = protocolRecord(this.close, Close);
         const target: Record<string, Param> = {};
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["close"] = target;
       }
       if (this.raw !== undefined) {
         const body = protocolRecord(this.raw, Raw);
         const target: Record<string, Param> = {};
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["raw"] = target;
       }
       if (this.broadcast !== undefined) {
@@ -118,7 +118,7 @@ export class Message {
         if (typeof name !== "string") throw new Error("Invalid name");
         target["name"] = name;
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["broadcast"] = target;
       }
       if (this.invoke !== undefined) {
@@ -131,7 +131,7 @@ export class Message {
         if (typeof method !== "string") throw new Error("Invalid method");
         target["method"] = method;
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["invoke"] = target;
       }
       if (this.reply !== undefined) {
@@ -141,9 +141,9 @@ export class Message {
         if (typeof id !== "string") throw new Error("Invalid id");
         target["id"] = id;
         const result = read(body, "result");
-        if (result !== undefined && result !== null) target["result"] = toJsonValue(result);
+        if (result !== undefined) target["result"] = toJsonValue(result)!;
         const error = read(body, "error");
-        if (error !== undefined && error !== null) target["error"] = toJsonValue(error);
+        if (error !== undefined) target["error"] = toJsonValue(error)!;
         dictionary["reply"] = target;
       }
       if (this.notify !== undefined) {
@@ -153,7 +153,7 @@ export class Message {
         if (typeof id !== "string") throw new Error("Invalid id");
         target["id"] = id;
         const param = read(body, "param");
-        if (param !== undefined && param !== null) target["param"] = toJsonValue(param);
+        if (param !== undefined) target["param"] = toJsonValue(param)!;
         dictionary["notify"] = target;
       }
       if (this.abort !== undefined) {

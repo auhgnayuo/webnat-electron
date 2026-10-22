@@ -21,7 +21,7 @@
 本包为私有包，从仓库安装并固定 tag：
 
 ```bash
-npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.0
+npm install git+ssh://git@github.com/auhgnayuo/webnat-electron.git#v2.0.1
 ```
 
 `electron` 是可选的 peer 依赖（`>=22.0.0`）；主入口只使用它的类型。
@@ -37,15 +37,17 @@ Webnat 需要 Web 端实现配合，同时支持其他 Native 平台：
 | Android (Kotlin) | [webnat-android](https://github.com/auhgnayuo/webnat-android) |
 | HarmonyOS (ArkTS) | [webnat-ohos](https://github.com/auhgnayuo/webnat-ohos) |
 
-## 2.0.0 数据约定与迁移
+## 2.0.1 数据约定与迁移
+
+2.0.1 开始区分字段缺失与显式 JSON null。已发布的 2.0.0 合同 v1 保持不变。
 
 业务参数、方法结果及通知只支持 JSON 兼容数据：`null`、`string`、`boolean`、有限 `number`、
-普通字符串键对象和数组，可递归嵌套。公开的 `Param` 类型不再包含递归的 `undefined`，也支持只读数组。
-缺失的顶层参数 / 结果规范化为 `null`；顶层 null 在协议中省略字段，嵌套 null 保留对象键和数组位置。
-方法 handler 可以不返回结果，此时远程调用 resolve 为 null。
+普通字符串键对象和数组，可递归嵌套。`Param` 支持只读数组，并允许对象属性 / 数组元素中的 `undefined`。
+顶层 `undefined` 表示字段缺失，显式 `null` 保留；对象中的 `undefined` 属性递归省略，数组中的 `undefined` / 空位转为 `null`。
+方法 handler 不返回结果时，远程调用 resolve 为 `undefined`。
 
-拒绝 NaN / Infinity、Date、Map、Set、类实例、函数、BigInt、循环引用、嵌套 undefined、数组空洞、
-Symbol 键、访问器及对象隐藏字段。不调用 toJSON / toString 兜底，不删除字段或改写为 null / 空对象。
+拒绝 NaN / Infinity、Date、Map、Set、类实例、函数、BigInt、循环引用、
+Symbol 键、访问器及对象隐藏字段。不调用 toJSON / toString 兜底，也不会将非法值改写为 null / 空对象。
 JSON 对象请使用普通记录而不是 Map；自定义对象需要显式转换，数组中的空位置请显式填 null。
 
 ```typescript
@@ -206,4 +208,4 @@ npm test             # build + 单测 + 真实 Electron 22.0.2 集成测试
 
 ## 发布
 
-本次统一为 2.0.0 / v2.0.0。请同步升级 Web SDK 与 Native 桥；手动发布命令与迁移说明见 `RELEASING.md`。
+本次统一为 2.0.1 / v2.0.1。请同步升级 Web SDK 与 Native 桥；手动发布命令与迁移说明见 `RELEASING.md`。

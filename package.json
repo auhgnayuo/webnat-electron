@@ -1,6 +1,6 @@
 {
   "name": "webnat",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A lightweight WebContents-Native bridge library for Electron, supporting raw messages, broadcast, and RPC.",
   "author": "Auhgnayuo",
   "license": "MIT",
